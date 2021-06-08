@@ -22,6 +22,10 @@ or outright removed. Rationale will be provided for all removed content.
     often lacks time pressure (the food clock all but disappears past the early game) and so
     techniques incentivize slow, passive play while waiting for used techniques to recharge.
 
+Combat System Changes
+- [PLANNED] Luck no longer gives a to-hit bonus.
+- [PLANNED] Port dnethack BAB?
+- [PLANNED] Dexterity contributes to AC, but the amount it contributes depends on weight?
 
 Monster Changes
 - Many monsters have gender-variant names. For example, female pigs are sows.
@@ -36,9 +40,13 @@ Race Changes
   - The unarmed attacks of drow no longer inflict sleep.
   - All weapons in the starting inventory of drow are automatically drugged.
 
-Display Changes
+Interface Changes
 - Ridden monsters are highlighted in bright magenta.
 - The floor of the gnomish mines is rendered in the same color as the walls.
+- Weapons and Armor now display their approximate AC, attack bonus, and damage.
+  - As a bonus, this allows the player to distinguish "fake artifacts" from real artifacts.
+- [PLANNED] Approximate attack bonus is displayed on the bottom line.
+- [PLANNED] Approximate damage is displayed on the bottom line.
 
 Balancing
 - Potions of paralysis injected via dipped weapons no longer paralyze monsters for rnd(25) turns.
