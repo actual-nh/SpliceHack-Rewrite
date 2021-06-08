@@ -23,7 +23,14 @@ or outright removed. Rationale will be provided for all removed content.
     techniques incentivize slow, passive play while waiting for used techniques to recharge.
 
 Combat System Changes
-- [PLANNED] Luck no longer gives a to-hit bonus.
+- Luck no longer gives a to-hit bonus.
+- Weapons have gone through a rebalance.
+    -Many weapons now have bonuses or penalties to hit, and can also influence AC when wielded.
+    - Given the emphasis on to-hit bonus, these small bonuses and penalties are now much more
+      important than they would otherwise be.
+    - [PLANNED] These values can be influenced by the material of the weapon.
+- [PLANNED] AC and DR have been split. This system is similar to the one in dnethack, but with
+  some significant changes.
 - [PLANNED] Port dnethack BAB?
 - [PLANNED] Dexterity contributes to AC, but the amount it contributes depends on weight?
 
@@ -45,8 +52,7 @@ Interface Changes
 - The floor of the gnomish mines is rendered in the same color as the walls.
 - Weapons and Armor now display their approximate AC, attack bonus, and damage.
   - As a bonus, this allows the player to distinguish "fake artifacts" from real artifacts.
-- [PLANNED] Approximate attack bonus is displayed on the bottom line.
-- [PLANNED] Approximate damage is displayed on the bottom line.
+- Approximate attack bonus is displayed on the bottom line.
 
 Balancing
 - Potions of paralysis injected via dipped weapons no longer paralyze monsters for rnd(25) turns.
@@ -54,6 +60,9 @@ Balancing
   remains a very strong option.
 - Increased generation of items that have been dipped in random potions from one in 10000 to one
   in 800 poisonable objects.
+
+Minor Changes
+- Double-headed axes are now referred to as "double-bitted."
 
 Bug Fixes
 - While porting the previous SpliceHack code, numerous bugs were discovered and fixed. The full
