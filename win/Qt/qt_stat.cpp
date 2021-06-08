@@ -114,6 +114,7 @@ NetHackQtStatusWindow::NetHackQtStatusWindow() :
     hp(this,"Hit Points"),
     power(this,"Power"),
     ac(this,"Armor Class"),
+    tohit(this, "To-Hit"),
     level(this,"Level"), // Xp level, with "/"+Exp points optionally appended
     blank1(this, ""),    // used for padding to align columns (was once 'exp')
     gold(this,"Gold"),   // gold used to be this row's first column, now last
@@ -267,6 +268,7 @@ NetHackQtStatusWindow::NetHackQtStatusWindow() :
         statbox->addWidget(&hp);
         statbox->addWidget(&power);
         statbox->addWidget(&ac);
+        statbox->addWidget(&tohit);
         statbox->addWidget(&level);
         if (spreadout) {
             // when not condensed, put a blank field in front of Gold;
@@ -348,6 +350,7 @@ void NetHackQtStatusWindow::doUpdate()
     hp.setFont(normal);
     power.setFont(normal);
     ac.setFont(normal);
+    tohit.setFont(normal);
     level.setFont(normal);
     blank1.setFont(normal); // padding
     gold.setFont(normal);
@@ -446,6 +449,7 @@ void NetHackQtStatusWindow::resizeEvent(QResizeEvent*)
     hp.setGeometry(x,y,iw,lh); x+=iw;
     power.setGeometry(x,y,iw,lh); x+=iw;
     ac.setGeometry(x,y,iw,lh); x+=iw;
+    tohit.setGeometry(x,y,iw,lh); x+=iw;
     level.setGeometry(x,y,iw,lh); x+=iw;
     //exp.setGeometry(x,y,iw,lh); x+=iw;
     x=0; y+=lh;
@@ -516,6 +520,7 @@ void NetHackQtStatusWindow::fadeHighlighting()
     hp.dissipateHighlight();
     power.dissipateHighlight();
     ac.dissipateHighlight();
+    tohit.dissipateHighlight();
     level.dissipateHighlight();
     align.dissipateHighlight();
 
@@ -860,6 +865,7 @@ void NetHackQtStatusWindow::updateStats()
     buf.sprintf("/%d", u.uenmax);
     power.setLabel("Pow:", (long) u.uen, buf);
     ac.setLabel("AC:", (long) u.uac);
+    tohit.setLabel("To-Hit:", (long) botl_hitbonus());
     // gold prefix used to be "Au:", tty uses "$:"; never too wide to fit;
     // practical limit due to carrying capacity limit is less than 300K
     long goldamt = money_cnt(g.invent);
@@ -962,6 +968,7 @@ void NetHackQtStatusWindow::updateStats()
 	power.highlightWhenChanging();
         ac.highlightWhenChanging();
             ac.setCompareMode(SmallerIsBetter);
+    tohit.highlightWhenChanging();
 	level.highlightWhenChanging();
 	gold.highlightWhenChanging();
 
