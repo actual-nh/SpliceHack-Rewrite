@@ -132,6 +132,13 @@ moveloop(boolean resuming)
                 } while (monscanmove);
                 g.context.mon_moving = FALSE;
 
+                /* heaven or hell mode: player always has 1 maxhp */
+                if (u.uroleplay.heaven_or_hell) {
+                    u.uhpmax = 1;
+                    if (u.uhp > u.uhpmax)
+                        u.uhp = u.uhpmax;
+                }
+
                 if (!monscanmove && g.youmonst.movement < NORMAL_SPEED) {
                     /* both hero and monsters are out of steam this round */
                     struct monst *mtmp;
@@ -169,6 +176,10 @@ moveloop(boolean resuming)
                             /* gain a free action on 1/3 of turns */
                             if (rn2(3) == 0)
                                 moveamt += NORMAL_SPEED;
+                        }
+
+                        if (Afraid && rn2(4)) { /* Afraid of a monster */
+                            moveamt += NORMAL_SPEED;
                         }
                     }
 
@@ -269,6 +280,12 @@ moveloop(boolean resuming)
                         regen_hp(wtcap);
                     }
 
+                    /* withering away */
+                    if (Withering && !Regeneration) {
+                        losehp(1, "withered away", NO_KILLER_PREFIX);
+                        g.context.botl = TRUE;
+                        interrupt_multi("You are slowly withering away.");
+                    }
                     /* moving around while encumbered is hard work */
                     if (wtcap > MOD_ENCUMBER && u.umoved) {
                         if (!(wtcap < EXT_ENCUMBER ? g.moves % 30
@@ -530,6 +547,8 @@ regen_hp(int wtcap)
     boolean reached_full = FALSE,
             encumbrance_ok = (wtcap < MOD_ENCUMBER || !u.umoved);
 
+    if (u.uroleplay.marathon)
+        return;
     if (Upolyd) {
         if (u.mh < 1) { /* shouldn't happen... */
             rehumanize();
@@ -556,7 +575,7 @@ regen_hp(int wtcap)
            no !Upolyd check here, so poly'd hero recovered lost u.uhp
            once u.mh reached u.mhmax; that may have been convenient
            for the player, but it didn't make sense for gameplay...] */
-        if (u.uhp < u.uhpmax && (encumbrance_ok || U_CAN_REGEN())) {
+        if (u.uhp < u.uhpmax && (encumbrance_ok || U_CAN_REGEN() && !Withering)) {
             if (u.ulevel > 9) {
                 if (!(g.moves % 3L)) {
                     int Con = (int) ACURR(A_CON);
@@ -573,7 +592,7 @@ regen_hp(int wtcap)
                 if (!(g.moves % (long) ((MAXULEV + 12) / (u.ulevel + 2) + 1)))
                     heal = 1;
             }
-            if (U_CAN_REGEN() && !heal)
+            if (U_CAN_REGEN() && !Withering && !heal)
                 heal = 1;
             if (Sleepy && u.usleep)
                 heal++;
@@ -709,7 +728,11 @@ newgame(void)
 
     if (flags.legacy) {
         flush_screen(1);
-        if (Role_if(PM_CONVICT)) {
+        if (u.uroleplay.heaven_or_hell) {
+            com_pager("legacy_heaven_or_hell");
+        } else if (u.uroleplay.marathon) {
+            com_pager("legacy_marathon");
+        } else if (Role_if(PM_CONVICT)) {
 		    com_pager("legacy_convict");
         } else
             com_pager("legacy");
@@ -739,6 +762,11 @@ welcome(boolean new_game) /* false => restoring an old game */
         /* death via self-genocide is pending */
         pline("You're back, but you still feel %s inside.", udeadinside());
         return;
+    }
+
+    if (new_game && u.uroleplay.marathon && !u.uroleplay.heaven_or_hell) {
+        u.uhp = 999;
+        u.uhpmax = 999;
     }
 
     if (Hallucination)

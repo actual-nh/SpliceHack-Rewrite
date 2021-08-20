@@ -114,7 +114,7 @@ static const char *angrytexts[] = { "quite upset", "ticked off", "furious" };
 long
 money2mon(struct monst* mon, long amount)
 {
-    struct obj *ygold = findgold(g.invent);
+    struct obj *ygold = findgold(g.invent, TRUE);
 
     if (amount <= 0) {
         impossible("%s payment in money2mon!", amount ? "negative" : "zero");
@@ -143,7 +143,7 @@ money2mon(struct monst* mon, long amount)
 void
 money2u(struct monst* mon, long amount)
 {
-    struct obj *mongold = findgold(mon->minvent);
+    struct obj *mongold = findgold(mon->minvent, TRUE);
 
     if (amount <= 0) {
         impossible("%s payment in money2u!", amount ? "negative" : "zero");
@@ -2263,6 +2263,40 @@ oid_price_adjustment(struct obj* obj, unsigned int oid)
     return res;
 }
 
+/* Relative prices for the different materials.
+ * Units for this are much more poorly defined than for weights; the best
+ * approximation would be something like "zorkmids per aum".
+ * We only care about the ratio of two of these together. */
+static
+const int matprices[] = {
+     0,
+     1, /* LIQUID */
+     1, /* WAX */
+     1, /* VEGGY */
+     3, /* FLESH */
+     2, /* PAPER */
+     3, /* CLOTH */
+     5, /* LEATHER */
+     8, /* WOOD */
+    20, /* BONE */
+   200, /* DRAGON_HIDE - DSM to scale mail */
+    10, /* IRON */
+    10, /* METAL */
+    10, /* COPPER */
+    30, /* SILVER */
+    30, /* GOLD */
+    30, /* PLATINUM */
+    50, /* ADAMANTINE */
+    15, /* COLD_IRON */
+    32, /* MITHRIL - mithril-coat to regular chain mail */
+    10, /* PLASTIC */
+    10, /* SLIME */
+    20, /* GLASS */
+   500, /* GEMSTONE */
+    15, /* SHADOW */
+    10, /* MINERAL */
+};
+
 /* calculate the value that the shk will charge for [one of] an object */
 static long
 get_cost(
@@ -2328,6 +2362,11 @@ get_cost(
             divisor *= 3L;
         }
     }
+
+    /* adjust for different material */
+    multiplier *= matprices[obj->material];
+    divisor *= matprices[objects[obj->otyp].oc_material];
+
     if (uarmh && uarmh->otyp == DUNCE_CAP)
         multiplier *= 4L, divisor *= 3L;
     else if ((Role_if(PM_TOURIST) && u.ulevel < (MAXULEV / 2))
@@ -2543,6 +2582,10 @@ set_cost(register struct obj* obj, register struct monst* shkp)
 
     tmp = get_pricing_units(obj) * unit_price;
 
+    /* adjust for different material */
+    multiplier *= matprices[obj->material];
+    divisor *= matprices[objects[obj->otyp].oc_material];
+
     if (uarmh && uarmh->otyp == DUNCE_CAP)
         divisor *= 3L;
     else if ((Role_if(PM_TOURIST) && u.ulevel < (MAXULEV / 2))
@@ -2556,7 +2599,7 @@ set_cost(register struct obj* obj, register struct monst* shkp)
     if (!obj->dknown || !objects[obj->otyp].oc_name_known) {
         if (obj->oclass == GEM_CLASS) {
             /* different shop keepers give different prices */
-            if (objects[obj->otyp].oc_material == GEMSTONE
+            if (obj->material == GEMSTONE
                 || objects[obj->otyp].oc_material == GLASS) {
                 tmp = (obj->otyp % (6 - shkp->m_id % 3));
                 tmp = (tmp + 3) * obj->quan;
@@ -2947,7 +2990,7 @@ append_honorific(char *buf)
                                            "most renowned and sacred" };
 
     Strcat(buf, honored[rn2(SIZE(honored) - 1) + u.uevent.udemigod]);
-    if (is_vampire(g.youmonst.data))
+    if (maybe_polyd(is_vampire(g.youmonst.data), Race_if(PM_VAMPIRE)))
         Strcat(buf, (flags.female == FEMALE) ? " dark lady" : (flags.female == MALE) ? " dark lord" : " dark liege");
     else if (is_elf(g.youmonst.data))
         Strcat(buf, (flags.female == FEMALE) ? " hiril" : " hir");
@@ -3707,6 +3750,7 @@ shk_uncurse(const char *slang, struct monst *shkp)
 		verbalize("All done - safe to handle, now!");
 		uncurse(obj);
 	}
+    update_inventory();
 }
 
 
@@ -4777,7 +4821,7 @@ shk_move(struct monst* shkp)
     if (inhishop(shkp))
         remove_damage(shkp, FALSE);
 
-    if ((udist = distu(omx, omy)) < 3 && (shkp->data != &mons[PM_GRID_BUG]
+    if ((udist = distu(omx, omy)) < 3 && (!horizontal_mover(shkp->data)
                                           || (omx == u.ux || omy == u.uy))) {
         if (ANGRY(shkp) || (Conflict && !resist_conflict(shkp))) {
             if (Displaced)
@@ -5418,6 +5462,9 @@ shk_chat(struct monst* shkp)
     } else if (is_izchak(shkp, FALSE)) {
         if (!Deaf && !muteshk(shkp))
             pline(Izchak_speaks[rn2(SIZE(Izchak_speaks))], shkname(shkp));
+    } else if (ESHK(shkp)->shoptype == MASKSHOP && !muteshk(shkp)) {
+        pline("%s surmises that you might meet a terrible fate in this dungeon.",
+              shkname(shkp));
     } else {
         if (!Deaf && !muteshk(shkp))
             pline("%s talks about the problem of shoplifters.", Shknam(shkp));
@@ -5476,13 +5523,14 @@ cost_per_charge(
          */
         tmp /= 2L;
     } else if (otmp->otyp == BAG_OF_TRICKS /* 1 - 20 */
-               || otmp->otyp == HORN_OF_PLENTY) {
+               || otmp->otyp == HORN_OF_PLENTY
+               || otmp->otyp == BAG_OF_RATS) {
         /* altusage: emptying of all the contents at once */
         if (!altusage)
             tmp /= 5L;
     } else if (otmp->otyp == CRYSTAL_BALL               /* 1 - 5 */
                || otmp->otyp == OIL_LAMP                /* 1 - 10 */
-               || otmp->otyp == BRASS_LANTERN
+               || otmp->otyp == LANTERN
                || (otmp->otyp >= MAGIC_FLUTE
                    && otmp->otyp <= DRUM_OF_EARTHQUAKE) /* 5 - 9 */
                || otmp->oclass == WAND_CLASS) {         /* 3 - 11 */
@@ -5529,7 +5577,8 @@ check_unpaid_usage(struct obj* otmp, boolean altusage)
     } else if (otmp->otyp == POT_OIL) {
         fmt = "%s%sThat will cost you %ld %s (Yendorian Fuel Tax).";
     } else if (altusage && (otmp->otyp == BAG_OF_TRICKS
-                            || otmp->otyp == HORN_OF_PLENTY)) {
+                            || otmp->otyp == HORN_OF_PLENTY
+                            || otmp->otyp == BAG_OF_RATS)) {
         fmt = "%s%sEmptying that will cost you %ld %s.";
         if (!rn2(3))
             arg1 = "Whoa!  ";

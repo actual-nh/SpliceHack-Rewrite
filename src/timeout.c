@@ -9,6 +9,7 @@ static void stoned_dialogue(void);
 static void vomiting_dialogue(void);
 static void choke_dialogue(void);
 static void levitation_dialogue(void);
+static void larva_dialogue(void);
 static void slime_dialogue(void);
 static void slimed_to_death(struct kinfo *);
 static void phaze_dialogue(void);
@@ -26,11 +27,13 @@ const struct propname {
 } propertynames[] = {
     { INVULNERABLE, "invulnerable" },
     { STONED, "petrifying" },
+    { LARVACARRIER, "hosting monster eggs" },
     { SLIMED, "becoming slime" },
     { STRANGLED, "strangling" },
     { SICK, "fatally sick" },
     { STUNNED, "stunned" },
     { CONFUSION, "confused" },
+    { AFRAID, "afraid" },
     { HALLUC, "hallucinating" },
     { BLINDED, "blinded" },
     { DEAF, "deafness" },
@@ -98,6 +101,7 @@ const struct propname {
     { REFLECTING, "reflecting" },
     { FREE_ACTION, "free action" },
     { FIXED_ABIL, "fixed abilities" },
+    { WITHERING, "withering away"},
     { STABLE,    "extraodinarily stable" },
     { LIFESAVED, "life will be saved" },
     {  0, 0 },
@@ -308,6 +312,34 @@ levitation_dialogue(void)
         } else
             pline1(s);
     }
+}
+
+static NEARDATA const char *const larva_texts[] = {
+    "You are feeling a little strange.",
+    "Your skin is crawling.",
+    "You can feel something moving inside your body!",
+    "%s burst from your body!"
+};
+
+static void
+larva_dialogue()
+{
+    register long i = (LarvaCarrier & TIMEOUT) / 2L;
+
+    if (((LarvaCarrier & TIMEOUT) % 2L) && i >= 0L && i < SIZE(larva_texts)) {
+        char buf[BUFSZ];
+
+        Strcpy(buf, larva_texts[SIZE(larva_texts) - i - 1L]);
+        if (index(buf, '%')) {
+            pline(buf,
+                  makeplural(Hallucination ? rndmonnam(NULL) : "Insect"));
+        } else
+            pline1(buf);
+    }
+    if (i <= 4L) {
+        stop_occupation();
+    }
+    exercise(A_CON, FALSE);
 }
 
 static NEARDATA const char *const slime_texts[] = {
@@ -522,6 +554,8 @@ nh_timeout(void)
         return; /* things past this point could kill you */
     if (Stoned)
         stoned_dialogue();
+    if (LarvaCarrier)
+        larva_dialogue();
     if (Slimed)
         slime_dialogue();
     if (Vomiting)
@@ -533,7 +567,8 @@ nh_timeout(void)
     if (HPasses_walls & TIMEOUT)
         phaze_dialogue();
     if (u.mtimedone && !--u.mtimedone) {
-        if (Unchanging)
+        if (Unchanging ||
+            (ublindf && ublindf->otyp == MASK))
             u.mtimedone = rnd(100 * g.youmonst.data->mlevel + 1);
         else if (is_were(g.youmonst.data))
             you_unwere(FALSE); /* if polycontrl, asks whether to rehumanize */
@@ -577,12 +612,21 @@ nh_timeout(void)
                 /* (unlike sliming, you aren't changing form here) */
                 done_timeout(STONING, STONED);
                 break;
+            case LARVACARRIER:
+                /* must be in this order for bones files. */
+                create_critters(2 + rn2(3), &mons[PM_ICHNEUMON_LARVA], TRUE);
+                losehp(d(1, 5), "being eaten from the inside by insects", KILLED_BY);
+                u.uhp = (int) (u.uhp / 2);
+                break;
             case SLIMED:
                 slimed_to_death(kptr); /* done_timeout(TURNED_SLIME,SLIMED) */
                 break;
             case VOMITING:
-                make_vomiting(0L, TRUE);
-                break;
+                if (uamul && uamul->otyp == AMULET_OF_NAUSEA) {
+                    make_vomiting((long) rnd(100), FALSE);
+                } else  {
+                    make_vomiting(0L, TRUE);
+                } break;
             case SICK:
                 /* You might be able to bounce back from food poisoning, but not
                  * other forms of illness. */
@@ -616,8 +660,15 @@ nh_timeout(void)
                 done_timeout(POISONING, SICK);
                 u.usick_type = 0;
                 break;
+            case WITHERING:
+                You("are no longer withering away.");
+                g.context.botl = TRUE;
+                break;
             case STABLE:
                 You("are a little less sure of your footing.");
+                break;
+            case REFLECTING:
+                You("are no longer as shiny.");
                 break;
             case REGENERATION:
                 You_feel("your metabolism returning to normal.");
@@ -641,6 +692,12 @@ nh_timeout(void)
                 set_itimeout(&HStun, 1L);
                 make_stunned(0L, TRUE);
                 if (!Stunned)
+                    stop_occupation();
+                break;
+            case AFRAID:
+                set_itimeout(&HAfraid, 1L);
+                make_afraid(0L, TRUE);
+                if (!Afraid)
                     stop_occupation();
                 break;
             case BLINDED:
@@ -1273,7 +1330,7 @@ see_lamp_flicker(struct obj* obj, const char* tailer)
     }
 }
 
-/* Print a dimming message for brass lanterns. */
+/* Print a dimming message for lanterns. */
 static void
 lantern_message(struct obj* obj)
 {
@@ -1377,14 +1434,14 @@ burn_object(anything* arg, long timeout)
         obj = (struct obj *) 0;
         break;
 
-    case BRASS_LANTERN:
+    case LANTERN:
     case OIL_LAMP:
         switch ((int) obj->age) {
         case 150:
         case 100:
         case 50:
             if (canseeit) {
-                if (obj->otyp == BRASS_LANTERN)
+                if (obj->otyp == LANTERN)
                     lantern_message(obj);
                 else
                     see_lamp_flicker(obj,
@@ -1394,7 +1451,7 @@ burn_object(anything* arg, long timeout)
 
         case 25:
             if (canseeit) {
-                if (obj->otyp == BRASS_LANTERN)
+                if (obj->otyp == LANTERN)
                     lantern_message(obj);
                 else {
                     switch (obj->where) {
@@ -1418,13 +1475,13 @@ burn_object(anything* arg, long timeout)
                     need_invupdate = TRUE;
                     /*FALLTHRU*/
                 case OBJ_MINVENT:
-                    if (obj->otyp == BRASS_LANTERN)
+                    if (obj->otyp == LANTERN)
                         pline("%slantern has run out of power.", whose);
                     else
                         pline("%s has gone out.", Yname2(obj));
                     break;
                 case OBJ_FLOOR:
-                    if (obj->otyp == BRASS_LANTERN)
+                    if (obj->otyp == LANTERN)
                         You_see("a lantern run out of power.");
                     else
                         You_see("%s go out.", an(xname(obj)));
@@ -1612,11 +1669,14 @@ begin_burn(struct obj* obj, boolean already_lit)
     long turns = 0;
     boolean do_timer = TRUE;
 
-    if (obj->age == 0 && obj->otyp != MAGIC_LAMP && !artifact_light(obj))
+    if (obj->age == 0 && obj->otyp != MAGIC_LAMP && obj->otyp != SCONCE && !artifact_light(obj))
         return;
 
     switch (obj->otyp) {
     case MAGIC_LAMP:
+    case SCONCE:
+    case GOLD_DRAGON_SCALE_MAIL:
+    case GOLD_DRAGON_SCALES:
         obj->lamplit = 1;
         do_timer = FALSE;
         break;
@@ -1628,7 +1688,7 @@ begin_burn(struct obj* obj, boolean already_lit)
         radius = 1; /* very dim light */
         break;
 
-    case BRASS_LANTERN:
+    case LANTERN:
     case OIL_LAMP:
         /* magic times are 150, 100, 50, 25, and 0 */
         if (obj->age > 150L)
@@ -1683,6 +1743,8 @@ begin_burn(struct obj* obj, boolean already_lit)
             update_inventory();
     }
 
+    radius = radius * ((u.nv_range > 1) ? 2 : 1);
+
     if (obj->lamplit && !already_lit) {
         xchar x, y;
 
@@ -1705,7 +1767,7 @@ end_burn(struct obj* obj, boolean timer_attached)
         return;
     }
 
-    if (obj->otyp == MAGIC_LAMP || artifact_light(obj))
+    if (obj->otyp == MAGIC_LAMP || obj->otyp == SCONCE || artifact_light(obj))
         timer_attached = FALSE;
 
     if (!timer_attached) {
@@ -1883,7 +1945,9 @@ static const ttable timeout_funcs[NUM_TIME_FUNCS] = {
     TTAB(hatch_egg, (timeout_proc) 0, "hatch_egg"),
     TTAB(fig_transform, (timeout_proc) 0, "fig_transform"),
     TTAB(melt_ice_away, (timeout_proc) 0, "melt_ice_away"),
-    TTAB(bomb_blow, (timeout_proc) 0, "bomb_blow")
+    TTAB(bomb_blow, (timeout_proc) 0, "bomb_blow"),
+    TTAB(fixture_activate, (timeout_proc) 0, "fixture_activate"),
+    TTAB(collapse_rope_bridge, (timeout_proc) 0, "collapse_rope_bridge")
 };
 #undef TTAB
 

@@ -31,9 +31,9 @@ static struct monst *restmonchn(NHFILE *);
 static struct fruit *loadfruitchn(NHFILE *);
 static void freefruitchn(struct fruit *);
 static void ghostfruit(struct obj *);
-static boolean restgamestate(NHFILE *, unsigned int *, unsigned int *);
+static boolean restgamestate(NHFILE *, unsigned int *, unsigned int *, unsigned int *);
 static void restmonsteeds(boolean);
-static void restlevelstate(unsigned int, unsigned int);
+static void restlevelstate(unsigned int, unsigned int, unsigned int);
 static int restlevelfile(xchar);
 static void restore_msghistory(NHFILE *);
 static void reset_oattached_mids(boolean);
@@ -383,6 +383,15 @@ restmon(NHFILE* nhfp, struct monst* mtmp)
             if (nhfp->structlevel)
                 mread(nhfp->fd, (genericptr_t) ERID(mtmp), sizeof(struct erid));
         }
+        /* etemplate - monster modifier */
+        if (nhfp->structlevel)
+            mread(nhfp->fd, (genericptr_t) &buflen, sizeof(buflen));
+        if (buflen > 0) {
+            newetemplate(mtmp);
+            if (nhfp->structlevel) {
+                mread(nhfp->fd, (genericptr_t) ETEMPLATE(mtmp), sizeof(struct etemplate));
+            }
+        }
         /* mcorpsenm - obj->corpsenm for mimic posing as corpse or
            statue (inline int rather than pointer to something) */
         if (nhfp->structlevel)
@@ -395,8 +404,14 @@ restmonchn(NHFILE* nhfp)
 {
     register struct monst *mtmp, *mtmp2 = 0;
     register struct monst *first = (struct monst *) 0;
-    int offset, buflen = 0;
+    int offset, buflen, monstoread, iter;
+    struct permonst *monbegin;
+    int namesize = sizeof(monbegin->pmnames);
+
     boolean ghostly = (nhfp->ftype == NHF_BONESFILE);
+
+    /* get the original base address */
+    mread(nhfp->fd, (genericptr_t)&monbegin, sizeof(monbegin));
 
     while (1) {
         if (nhfp->structlevel)
@@ -450,6 +465,9 @@ restmonchn(NHFILE* nhfp)
             restshk(mtmp, ghostly);
         if (mtmp->ispriest)
             restpriest(mtmp, ghostly);
+        if (has_etemplate(mtmp)) {
+            resttemplate(mtmp);
+        }
 
         if (!ghostly) {
             if (mtmp->m_id == g.context.polearm.m_id)
@@ -461,6 +479,18 @@ restmonchn(NHFILE* nhfp)
         impossible("Restmonchn: error reading monchn.");
         mtmp2->nmon = 0;
     }
+
+    /* get the permonst chain back */
+    mread(nhfp->fd, (genericptr_t) &monstoread, sizeof(int));
+
+    if (monstoread != NUMMONS) {
+        impossible("Restmonchn: number of permonst stored doesn't match current NUMMONS. Using default permonst");
+    } else {
+        for (iter = 0; iter < NUMMONS; iter++) {
+            mread(nhfp->fd, (genericptr_t) &mons[iter] + namesize, sizeof(struct permonst) - namesize);
+        }
+    }
+
     return first;
 }
 
@@ -519,12 +549,13 @@ ghostfruit(register struct obj* otmp)
 
 static
 boolean
-restgamestate(NHFILE* nhfp, unsigned int* stuckid, unsigned int* steedid)
+restgamestate(NHFILE* nhfp, unsigned int* stuckid, unsigned int* steedid, unsigned int* fearedmonid)
 {
     struct flag newgameflags;
     struct context_info newgamecontext; /* all 0, but has some pointers */
     struct obj *otmp;
     struct obj *bc_obj;
+    struct monst *mtmp;
     char timebuf[15];
     unsigned long uid = 0;
     boolean defer_perm_invent;
@@ -691,6 +722,10 @@ restgamestate(NHFILE* nhfp, unsigned int* stuckid, unsigned int* steedid)
         if (nhfp->structlevel)
             mread(nhfp->fd, (genericptr_t) steedid, sizeof *steedid);
     }
+    if (u.fearedmon) {
+        if (nhfp->structlevel)
+            mread(nhfp->fd, (genericptr_t) fearedmonid, sizeof *fearedmonid);
+    }
     if (nhfp->structlevel) {
         mread(nhfp->fd, (genericptr_t) g.pl_character, sizeof g.pl_character);
         mread(nhfp->fd, (genericptr_t) g.pl_fruit, sizeof g.pl_fruit);
@@ -758,7 +793,7 @@ restmonsteeds(boolean ghostly)
  * don't dereference a wild u.ustuck when saving the game state, for instance)
  */
 static void
-restlevelstate(unsigned int stuckid, unsigned int steedid)
+restlevelstate(unsigned int stuckid, unsigned int steedid, unsigned int fearedmonid)
 {
     register struct monst *mtmp;
 
@@ -778,6 +813,14 @@ restlevelstate(unsigned int stuckid, unsigned int steedid)
             panic("Cannot find the monster usteed.");
         u.usteed = mtmp;
         remove_monster(mtmp->mx, mtmp->my);
+    }
+    if (fearedmonid) {
+        for (mtmp = fmon; mtmp; mtmp = mtmp->nmon)
+            if (mtmp->m_id == fearedmonid)
+                break;
+        if (!mtmp)
+            panic("Cannot find the monster fearedmon.");
+        u.fearedmon = mtmp;
     }
 }
 
@@ -804,7 +847,7 @@ restlevelfile(xchar ltmp)
 int
 dorecover(NHFILE* nhfp)
 {
-    unsigned int stuckid = 0, steedid = 0; /* not a register */
+    unsigned int stuckid = 0, steedid = 0, fearedmonid = 0; /* not a register */
     xchar ltmp = 0;
     int rtmp;
     struct obj *otmp;
@@ -812,7 +855,7 @@ dorecover(NHFILE* nhfp)
     g.program_state.restoring = 1;
     get_plname_from_file(nhfp, g.plname);
     getlev(nhfp, 0, (xchar) 0);
-    if (!restgamestate(nhfp, &stuckid, &steedid)) {
+    if (!restgamestate(nhfp, &stuckid, &steedid, &fearedmonid)) {
         NHFILE tnhfp;
 
         display_nhwindow(WIN_MESSAGE, TRUE);
@@ -827,7 +870,7 @@ dorecover(NHFILE* nhfp)
         g.program_state.restoring = 0;
         return 0;
     }
-    restlevelstate(stuckid, steedid);
+    restlevelstate(stuckid, steedid, fearedmonid);
 #ifdef INSURANCE
     savestateinlock();
 #endif
@@ -842,6 +885,7 @@ dorecover(NHFILE* nhfp)
      */
     u.ustuck = (struct monst *) 0;
     u.usteed = (struct monst *) 0;
+    u.fearedmon = (struct monst *) 0;
 
 #ifdef MICRO
 #ifdef AMII_GRAPHICS
@@ -896,7 +940,7 @@ dorecover(NHFILE* nhfp)
 
     getlev(nhfp, 0, (xchar) 0);
     close_nhfile(nhfp);
-    restlevelstate(stuckid, steedid);
+    restlevelstate(stuckid, steedid, fearedmonid);
     g.program_state.something_worth_saving = 1; /* useful data now exists */
 
     if (!wizard && !discover)

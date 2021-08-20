@@ -339,7 +339,8 @@ describe_decor(void)
     } else if (!Underwater) {
         if (IS_POOL(iflags.prev_decor)
             || iflags.prev_decor == LAVAPOOL
-            || iflags.prev_decor == ICE) {
+            || iflags.prev_decor == ICE
+            || iflags.prev_decor == BRIDGE) {
             const char *ground = surface(u.ux, u.uy);
 
             if (iflags.last_msg != PLNMSG_BACK_ON_GROUND)
@@ -1817,6 +1818,15 @@ do_loot_cont(struct obj **cobjp,
     }
     cobj->lknown = 1; /* floor container, so no need for update_inventory() */
 
+    if (Hate_material(cobj->material)) {
+        char kbuf[BUFSZ];
+        pline("The %s lid %s!", materialnm[cobj->material],
+              (cobj->material == SILVER || cobj->material == COLD_IRON) 
+                ? "sears your flesh" : "hurts to touch");
+        Sprintf(kbuf, "opening a %s container", materialnm[cobj->material]);
+        losehp(rnd(sear_damage(cobj->material)), kbuf, KILLED_BY);
+    }
+    
     if (cobj->otyp == BAG_OF_TRICKS) {
         int tmp;
 
@@ -1825,6 +1835,19 @@ do_loot_cont(struct obj **cobjp,
         tmp = rnd(10);
         losehp(Maybe_Half_Phys(tmp), "carnivorous bag", KILLED_BY_AN);
         makeknown(BAG_OF_TRICKS);
+        g.abort_looting = TRUE;
+        return 1;
+    } else if (cobj->otyp == BAG_OF_RATS) {
+        You("carefully open %s...", the(xname(cobj)));
+        if (cobj->spe && create_critters(1 + rn2(7), &mons[PM_RABID_RAT], TRUE)) {
+            pline("A torrent of rats spews out!");
+            makeknown(BAG_OF_RATS);
+            cobj->spe = 0;
+            check_unpaid(cobj);
+        } else {
+            pline("%s emits a petulant squeaking noise and snaps shut.",
+                  The(xname(cobj)));
+        }
         g.abort_looting = TRUE;
         return 1;
     }
@@ -1984,7 +2007,7 @@ doloot(void)
         /* always use a turn when choosing a direction is impaired,
            even if you've successfully targetted a saddled creature
            and then answered "no" to the "remove its saddle?" prompt */
-        if (Confusion || Stunned)
+        if (Confusion || Stunned || Afraid)
             timepassed = 1;
 
         /* Preserve pre-3.3.1 behaviour for containers.
@@ -2149,7 +2172,7 @@ static boolean
 mbag_explodes(struct obj *obj, int depthin)
 {
     /* these won't cause an explosion when they're empty */
-    if ((obj->otyp == WAN_CANCELLATION || obj->otyp == BAG_OF_TRICKS)
+    if ((obj->otyp == WAN_CANCELLATION || obj->otyp == BAG_OF_TRICKS || obj->otyp == BAG_OF_RATS)
         && obj->spe <= 0)
         return FALSE;
 
@@ -2645,7 +2668,7 @@ use_container(struct obj **objp,
         if (held)
             You("must put it down to unlock.");
         return 0;
-    } else if (obj->otrapped) {
+    } else if (obj->otrapped && obj->otyp != COFFIN) {
         if (held)
             You("open %s...", the(xname(obj)));
         (void) chest_trap(obj, HAND, FALSE);
@@ -2772,6 +2795,15 @@ use_container(struct obj **objp,
     loot_in = (c == 'i' || c == 'b' || c == 'r');
     loot_in_first = (c == 'r'); /* both, reversed */
     stash_one = (c == 's');
+
+    /* A coffin might contain a vampire. */
+    if (g.current_container->otyp == COFFIN && g.current_container->otrapped) {
+        makemon(mkclass(S_VAMPIRE, 0), u.ux, u.uy, NO_MM_FLAGS);
+        You("disturb the coffin's occupant!");
+        g.current_container->otrapped = 0;
+        g.abort_looting = TRUE;
+        goto containerdone;
+    }
 
     /* out-only or out before in */
     if (loot_out && !loot_in_first) {
@@ -3207,6 +3239,8 @@ dotip(void)
     if (Is_candle(cobj) && cobj->lamplit) {
         /* note "wax" even for tallow candles to avoid giving away info */
         spillage = "wax";
+    } else if (cobj->otyp == SCONCE) {
+        spillage = "tar";
     } else if ((cobj->otyp == POT_OIL && cobj->lamplit)
                || (cobj->otyp == OIL_LAMP && cobj->age != 0L)
                || (cobj->otyp == MAGIC_LAMP && cobj->spe != 0)) {
@@ -3294,8 +3328,9 @@ tipcontainer(struct obj *box) /* or bag */
             g.multi_reason = "tipping a container";
             g.nomovemsg = "";
         }
-    } else if (box->otyp == BAG_OF_TRICKS || box->otyp == HORN_OF_PLENTY) {
-        boolean bag = box->otyp == BAG_OF_TRICKS;
+    } else if (box->otyp == BAG_OF_TRICKS || box->otyp == BAG_OF_RATS
+                || box->otyp == HORN_OF_PLENTY) {
+        boolean bag = box->otyp == BAG_OF_TRICKS || BAG_OF_RATS;
         int old_spe = box->spe, seen = 0;
 
         if (maybeshopgoods && !box->no_charge)

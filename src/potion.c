@@ -95,6 +95,32 @@ make_stunned(long xtime, boolean talk)
     set_itimeout(&HStun, xtime);
 }
 
+void
+make_afraid(long xtime, boolean talk)
+{
+    long old = HAfraid;
+
+    if (Unaware)
+        talk = FALSE;
+
+    if (!xtime && old) {
+        if (talk)
+            You_feel("less %s now.", Hallucination ? "frazzled" : "afraid");
+    }
+
+    if (xtime && !old) {
+        if (talk && u.fearedmon) {
+            You("are afraid of %s!", mon_nam(u.fearedmon));
+        } else if (talk) {
+            You("feel afraid!");
+        }
+    }
+    if ((xtime && !old) || (!xtime && old))
+        g.context.botl = TRUE;
+
+    set_itimeout(&HAfraid, xtime);
+}
+
 /* Sick is overloaded with both fatal illness and food poisoning (via
    u.usick_type bit mask), but delayed killer can only support one or
    the other at a time.  They should become separate intrinsics.... */
@@ -105,6 +131,8 @@ make_sick(long xtime,
           int type)
 {
     struct kinfo *kptr;
+    struct obj *otmp;
+    int copperarmor;
     long old = Sick;
 
 #if 0   /* tell player even if hero is unconscious */
@@ -114,6 +142,20 @@ make_sick(long xtime,
     if (xtime > 0L) {
         if (Sick_resistance)
             return;
+        /* Copper's anti-microbial properties make it effective in warding off
+         * sickness. */
+        for (otmp = g.invent; otmp; otmp = otmp->nobj) {
+            if ((otmp->owornmask & W_ARMOR) && otmp->material == COPPER) {
+                copperarmor++;
+            }
+        }
+        if (rn2(5) < copperarmor) {
+            /* practially, someone could have copper helm, boots, body armor,
+             * shield, gloves. If they're *all* copper, you're immune to
+             * sickness. */
+            You_feel("briefly ill.");
+            return;
+        }
         if (!old) {
             /* newly sick */
             You_feel("deathly sick.");
@@ -154,6 +196,23 @@ make_sick(long xtime,
         }
     } else
         dealloc_killer(kptr);
+}
+
+void
+make_carrier(xtime, talk)
+long xtime;
+boolean talk;
+{
+    long old = LarvaCarrier;
+
+    if (Unaware)
+        talk = FALSE;
+
+    set_itimeout(&LarvaCarrier, xtime);
+    g.context.botl = TRUE;
+    if (!xtime && old)
+        if (talk)
+            You_feel("much more yourself.");
 }
 
 void
@@ -499,6 +558,15 @@ dodrink(void)
             return 1;
         }
     }
+    /* Or a furnace? */
+    if (IS_FURNACE(levl[u.ux][u.uy].typ)
+        /* not as low as floor level but similar restrictions apply */
+        && can_reach_floor(FALSE)) {
+        if (yn("Drink from the furnace?") == 'y') {
+            drinkfurnace();
+            return 1;
+        }
+    }
     /* Or are you surrounded by water? */
     if (Underwater && !u.uswallow) {
         if (yn("Drink the water around you?") == 'y') {
@@ -685,6 +753,7 @@ peffects(struct obj *otmp)
         }
         break;
     case POT_BOOZE:
+        u.uconduct.alcohol++;
         g.potion_unkn++;
         pline("Ooph!  This tastes like %s%s!",
               otmp->odiluted ? "watered down " : "",
@@ -702,6 +771,8 @@ peffects(struct obj *otmp)
             g.multi = -rnd(15);
             g.nomovemsg = "You awake with a headache.";
         }
+        /* liquid courage */
+        make_afraid(0L, FALSE);
         break;
     case POT_ENLIGHTENMENT:
         if (otmp->cursed) {
@@ -889,7 +960,12 @@ peffects(struct obj *otmp)
         }
         if (Hallucination) {
             You("are shocked back to your senses!");
+            u.uroleplay.hallu = FALSE;
             (void) make_hallucinated(0L, FALSE, 0L);
+        }
+        if (LarvaCarrier) {
+            You("feel as if your body is your own again.");
+            make_carrier(0L, FALSE);
         }
         break;
     case POT_FILTH:
@@ -938,6 +1014,34 @@ peffects(struct obj *otmp)
                 itmp = (otmp->blessed || ii == 1) ? 0 : -1;
                 if (adjattrib(i, 1, itmp) && !otmp->blessed)
                     break;
+            }
+        }
+        break;
+    case POT_REFLECTION:
+        if (otmp->cursed) {
+            pline("It\'s like drinking glue!");
+            g.potion_unkn++;
+        } else {
+            pline("You are covered in a mirror-like sheen!");
+            if (otmp->blessed) {
+                set_itimeout(&HReflecting, rn1(50, 250));
+            } else {
+                set_itimeout(&HReflecting, rn1(10, 20));
+            }
+        }
+        break;
+    case POT_REGENERATION:
+        if (otmp->cursed) {
+            You("begin to wither away!");
+            incr_itimeout(&HWithering, rn1(10, 20));
+            g.potion_unkn++;
+            g.context.botl = TRUE;
+        } else {
+            You("metabolism kicks into overdrive!");
+            if (otmp->blessed) {
+                set_itimeout(&HRegeneration, rn1(100, 100));
+            } else {
+                set_itimeout(&HRegeneration, rn1(50, 50));
             }
         }
         break;
@@ -1158,6 +1262,54 @@ peffects(struct obj *otmp)
         if (!Unchanging)
             polyself(0);
         break;
+    case POT_BLOOD:
+  	case POT_VAMPIRE_BLOOD:
+        g.potion_unkn++;
+        u.uconduct.unvegan++;
+        if (maybe_polyd(is_vampire(g.youmonst.data), Race_if(PM_VAMPIRE))) {
+            violated_vegetarian();
+            if (otmp->cursed)
+                    pline("Yecch!  This %s.", Hallucination ?
+            "liquid could do with a good stir" : "blood has congealed");
+            else pline(Hallucination ?
+                "The %s liquid stirs memories of home." :
+                "The %s blood tastes delicious.",
+                otmp->odiluted ? "watery" : "thick");
+            if (!otmp->cursed)
+                lesshungry((otmp->odiluted ? 1 : 2) *
+                    (otmp->otyp == POT_VAMPIRE_BLOOD ? 400 :
+                    otmp->blessed ? 15 : 10));
+            if (otmp->otyp == POT_VAMPIRE_BLOOD && otmp->blessed) {
+                int num = newhp();
+                if (Upolyd) {
+                    u.mhmax += num;
+                    u.mh += num;
+                } else {
+                    u.uhpmax += num;
+                    u.uhp += num;
+                }
+            }
+        } else if (otmp->otyp == POT_VAMPIRE_BLOOD) {
+            /* [CWC] fix conducts for potions of (vampire) blood -
+                doesn't use violated_vegetarian() to prevent
+                duplicated "you feel guilty" messages */
+            u.uconduct.unvegetarian++;
+            if (u.ualign.type == A_LAWFUL || Role_if(PM_MONK)) {
+                You_feel("%sguilty about drinking such a vile liquid.",
+                    Role_if(PM_MONK) ? "especially " : "");
+                u.ugangr++;
+                adjalign(-15);
+            } else if (u.ualign.type == A_NEUTRAL)
+                    adjalign(-3);
+            exercise(A_CON, FALSE);
+            if (!Unchanging && polymon(PM_VAMPIRE))
+                u.mtimedone = 0;	/* "Permament" change */
+        } else {
+            violated_vegetarian();
+            pline("Ugh.  That was vile.");
+            make_vomiting(Vomiting+d(10,8), TRUE);
+        }
+        break;
     default:
         impossible("What a funny potion! (%u)", otmp->otyp);
         return 0;
@@ -1168,7 +1320,7 @@ peffects(struct obj *otmp)
 void
 healup(int nhp, int nxtra, boolean curesick, boolean cureblind)
 {
-    if (nhp) {
+    if (nhp && !u.uroleplay.marathon) {
         if (Upolyd) {
             u.mh += nhp;
             if (u.mh > u.mhmax)
@@ -1337,10 +1489,11 @@ potionhit(struct monst *mon, struct obj *obj, int how)
         distance = 0;
         pline_The("%s crashes on your %s and breaks into shards.", botlnam,
                   body_part(HEAD));
-        losehp(Maybe_Half_Phys(rnd(2)),
-               (how == POTHIT_OTHER_THROW) ? "propelled potion" /* scatter */
-                                           : "thrown potion",
-               KILLED_BY_AN);
+        if (!u.uroleplay.heaven_or_hell)
+            losehp(Maybe_Half_Phys(rnd(2)),
+                (how == POTHIT_OTHER_THROW) ? "propelled potion" /* scatter */
+                                            : "thrown potion",
+                KILLED_BY_AN);
     } else if (!injection) {
         tx = mon->mx, ty = mon->my;
         /* sometimes it hits the saddle */
@@ -1407,6 +1560,20 @@ potionhit(struct monst *mon, struct obj *obj, int how)
             You_feel("a little %s.", Hallucination ? "normal" : "strange");
             if (!Unchanging && !Antimagic)
                 polyself(0);
+            break;
+        case POT_BLOOD:
+        case POT_VAMPIRE_BLOOD:
+            if (Blind)
+                You_feel("sticky!");
+            else if (Race_if(PM_INFERNAL)) {
+                pline("Blood drips down your form.");
+                exercise(A_CHA, TRUE);
+            }
+            else {
+                You("are covered in blood! How disgusting!");
+                exercise(A_CHA, FALSE);
+            }
+
             break;
         case POT_ACID:
             if (!Acid_resistance) {
@@ -1562,6 +1729,14 @@ potionhit(struct monst *mon, struct obj *obj, int how)
                 paralyze_monst(mon, rnd(5));
             }
             break;
+        case POT_BLOOD:
+        case POT_VAMPIRE_BLOOD:
+            if (canspotmon(mon)) {
+                pline("%s is covered in blood!", Monnam(mon));
+                if (!Blind && (is_vampire(mon->data) || is_demon(mon->data)))
+                    pline("%s seems to enjoy the blood bath.", Monnam(mon));
+            }
+            break;
         case POT_SPEED:
             angermon = FALSE;
             mon_adjust_speed(mon, 1, obj);
@@ -1642,6 +1817,12 @@ potionhit(struct monst *mon, struct obj *obj, int how)
                     else
                         monkilled(mon, "", AD_ACID);
                 }
+            }
+            break;
+        case POT_REGENERATION:
+            if (obj->cursed) {
+                pline("%s begins to wither!", Monnam(mon));
+                mon->mwither = 1;
             }
             break;
         case POT_POLYMORPH:
@@ -1807,6 +1988,18 @@ potionbreathe(struct obj *obj)
         }
         exercise(A_CON, TRUE);
         break;
+    case POT_REGENERATION:
+        if (obj->cursed) {
+            incr_itimeout(&HWithering, rn1(5, 5));
+            exercise(A_CON, FALSE);
+            You("start to shrivel up!");
+        } else {
+            You("feel a tiny bit better.");
+            set_itimeout(&HRegeneration, rn1(5, 5));
+            kn++;
+        }
+        g.context.botl = TRUE;
+        break;
     case POT_SICKNESS:
         if (!Role_if(PM_HEALER)) {
             if (Upolyd) {
@@ -1953,6 +2146,7 @@ mixtype(struct obj *o1, struct obj *o2)
         case POT_BLINDNESS:
         case POT_CONFUSION:
         case POT_FILTH:
+        case POT_VAMPIRE_BLOOD:
             return POT_WATER;
         }
         break;
@@ -1979,6 +2173,8 @@ mixtype(struct obj *o1, struct obj *o2)
         break;
     case POT_FRUIT_JUICE:
         switch (o2typ) {
+        case POT_BLOOD:
+            return POT_VAMPIRE_BLOOD;
         case POT_SICKNESS:
             return POT_SICKNESS;
         case POT_ENLIGHTENMENT:
@@ -2083,6 +2279,14 @@ dodip(void)
         /* "Dip <the object> into the fountain?" */
         if (yn(qbuf) == 'y') {
             dipfountain(obj);
+            return 1;
+        }
+    } else if (IS_FURNACE(here)) {
+        Snprintf(qbuf, sizeof(qbuf), "%s%s into the furnace?", Dip_,
+                flags.verbose ? obuf : shortestname);
+        /* "Dip <the object> into the fountain?" */
+        if (yn(qbuf) == 'y') {
+            dipfurnace(obj);
             return 1;
         }
     } else if (is_pool(u.ux, u.uy)) {

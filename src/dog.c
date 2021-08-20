@@ -68,8 +68,6 @@ pet_type(void)
     } else if (Role_if(PM_DRAGON_RIDER)) {
         dragon_type = PM_BABY_SILVER_DRAGON 
             + rn2(PM_BABY_YELLOW_DRAGON - PM_BABY_SILVER_DRAGON);
-        if (dragon_type == PM_BABY_BLACK_DRAGON)
-            dragon_type = PM_BABY_GRAY_DRAGON;
         prop = objects[GRAY_DRAGON_SCALES + dragon_type - PM_BABY_GRAY_DRAGON].oc_oprop;
         /* Dragonmasters resist the element of their pet */
         if (prop == REFLECTING || prop == ANTIMAGIC)
@@ -175,7 +173,7 @@ makedog(void)
         return ((struct monst *) 0);
 
     pettype = pet_type();
-    if (pettype == PM_LITTLE_DOG || pettype == PM_WINTER_WOLF_PUP)
+    if (mons[pettype].mlet == S_DOG)
         petname = g.dogname;
     else if (pettype == PM_PONY)
         petname = g.horsename;
@@ -183,6 +181,10 @@ makedog(void)
         petname = g.dragonname;
     else if (pettype == PM_SEWER_RAT)
 		petname = g.ratname;
+    else if (is_bird(&mons[pettype]))
+        petname = g.birdname;
+    else if (pettype == PM_MONKEY)
+        petname = g.monkeyname;
     else
         petname = g.catname;
 
@@ -196,14 +198,33 @@ makedog(void)
         if (Role_if(PM_BARBARIAN))
             petname = "Idefix"; /* Obelix */
         if (Role_if(PM_RANGER))
-            petname = "Sirius"; /* Orion's dog */
+            if (Race_if(PM_ELF))
+                petname = "Huan"; /* Silmarillion */
+            else
+                petname = "Sirius"; /* Orion's dog */
     } else if (!*petname && pettype == PM_SEWER_RAT) {
-	    if(Role_if(PM_CONVICT)) petname = "Nicodemus"; /* Rats of NIMH */
-    } else if (!*petname && pettype == PM_BABY_RED_DRAGON) {
-	    if(Role_if(PM_DRAGON_RIDER)) petname = "Flame"; /* Dungeon Magazine */
+	    if (Role_if(PM_CONVICT)) petname = "Nicodemus"; /* Rats of NIMH */
+    } else if (!*petname && pettype == PM_PARROT) {
+        if (Role_if(PM_PIRATE)) petname = "Polly";
+    } else if (!*petname && pettype && Role_if(PM_DRAGON_RIDER)) {
+	    if (pettype == PM_BABY_RED_DRAGON) petname = "Flame"; /* Dungeon Magazine */
+        else if (pettype == PM_BABY_BLACK_DRAGON) petname = "Ancalagon"; /* Silmarillion */
+        else if (pettype == PM_BABY_BLUE_DRAGON) petname = "Saphira"; /* Eragon */
+        else if (pettype == PM_BABY_GREEN_DRAGON) petname = rn2(20) ? "Rhaegal" : "Trogdor"; /* ASOIAF / Homestar */
+        else if (pettype == PM_BABY_GRAY_DRAGON) petname = "Errol"; /* Discworld */
+        else if (pettype == PM_BABY_WHITE_DRAGON) petname = "Seath"; /* Dark Souls */
+        else if (pettype == PM_BABY_GOLD_DRAGON) petname = "Glorund"; /* Silmarillion */
+    } else if (!*petname && pettype == PM_PONY) {
+        if (Role_if(PM_KNIGHT) && Race_if(PM_VAMPIRE))
+            petname = "White Lily"; /* Vampire Knight */
     }
 
     mtmp = makemon(&mons[pettype], u.ux, u.uy, MM_EDOG);
+
+    if (mtmp && Race_if(PM_VAMPIRE) && !has_etemplate(mtmp)) {
+        newetemplate(mtmp);
+        initetemplate(mtmp, MT_VAMPIRIC);
+    }
 
     if (!mtmp)
         return ((struct monst *) 0); /* pets were genocided */
@@ -220,6 +241,7 @@ makedog(void)
         mtmp = christen_monst(mtmp, petname);
 
     initedog(mtmp);
+    learn_monster(pettype);
     return  mtmp;
 }
 
@@ -794,6 +816,10 @@ dogfood(struct monst *mon, struct obj *obj)
     if (is_quest_artifact(obj) || obj_resists(obj, 0, 95))
         return obj->cursed ? TABU : APPORT;
 
+    /* KMH -- Koalas can only eat eucalyptus */
+	if (mon->data == &mons[PM_KOALA])
+		return (obj->otyp == EUCALYPTUS_LEAF ? DOGFOOD : APPORT);
+
     switch (obj->oclass) {
     case FOOD_CLASS:
         if (obj->otyp == CORPSE || obj->otyp == TIN || obj->otyp == EGG)
@@ -837,6 +863,15 @@ dogfood(struct monst *mon, struct obj *obj)
                 return stale_egg(obj) ? CADAVER : starving ? ACCFOOD : POISON;
             return TABU;
         }
+        /* vampires only "eat" very fresh corpses ... 
+	     * Assume meat -> blood
+	     */
+	    if (is_vampire(mon->data)) {
+	    	return (obj->otyp == CORPSE &&
+		      has_blood(&mons[obj->corpsenm]) && !obj->oeaten &&
+	    	  peek_at_iced_corpse_age(obj) + 5 >= g.monstermoves) ?
+			    DOGFOOD : TABU;
+	    }
 
         switch (obj->otyp) {
         case TRIPE_RATION:
@@ -885,6 +920,8 @@ dogfood(struct monst *mon, struct obj *obj)
                          : MANFOOD;
         case TIN:
             return metallivorous(mptr) ? ACCFOOD : MANFOOD;
+        case PINCH_OF_CATNIP:
+            return is_feline(mptr) ? DOGFOOD : MANFOOD;
         case APPLE:
             return herbi ? DOGFOOD : starving ? ACCFOOD : MANFOOD;
         case CARROT:
@@ -905,9 +942,9 @@ dogfood(struct monst *mon, struct obj *obj)
         if (obj->otyp == AMULET_OF_STRANGULATION
             || obj->otyp == RIN_SLOW_DIGESTION)
             return TABU;
-        if (mon_hates_silver(mon) && objects[obj->otyp].oc_material == SILVER)
+        if (mon_hates_material(mon, obj->material))
             return TABU;
-        if (mptr == &mons[PM_GELATINOUS_CUBE] && is_organic(obj))
+        if (is_bigeater(mptr) && is_organic(obj))
             return ACCFOOD;
         if (metallivorous(mptr) && is_metallic(obj)
             && (is_rustprone(obj) || mptr != &mons[PM_RUST_MONSTER])) {

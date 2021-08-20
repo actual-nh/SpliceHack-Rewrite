@@ -39,11 +39,24 @@ dosounds(void)
         };
         You_hear1(fountain_msg[rn2(3) + hallu]);
     }
+    if (g.level.flags.nvents && !rn2(400)) {
+        static const char *const vent_msg[4] = {
+            "gentle hissing.", "a soft whoosh.",
+            "regular hissing.", "a carbon monoxide detector!",
+        };
+        You_hear1(vent_msg[rn2(3) + hallu]);
+    }
     if (g.level.flags.nsinks && !rn2(300)) {
         static const char *const sink_msg[3] = {
             "a slow drip.", "a gurgling noise.", "dishes being washed!",
         };
         You_hear1(sink_msg[rn2(2) + hallu]);
+    }
+    if (g.level.flags.nfurnaces && !rn2(300)) {
+        static const char *const furnace_msg[3] = {
+            "a slow bubbling.", "crackling flames.", "logs in the fireplace!",
+        };
+        You_hear1(furnace_msg[rn2(2) + hallu]);
     }
     if (g.level.flags.has_court && !rn2(200)) {
         static const char *const throne_msg[4] = {
@@ -194,6 +207,81 @@ dosounds(void)
                 && mon_in_room(mtmp, ZOO)) {
                 You_hear1(zoo_msg[rn2(2) + hallu]);
                 return;
+            }
+        }
+    }
+    if (g.level.flags.has_den && !rn2(200)) {
+        static const char *const zoo_msg[3] = {
+            "the baying of hounds.",
+            "angry snarling.", "Sher Kahn!",
+        };
+        for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
+            if (DEADMONSTER(mtmp))
+                continue;
+            if ((mtmp->msleeping || is_animal(mtmp->data))
+                && mon_in_room(mtmp, DEN)) {
+                You_hear1(zoo_msg[rn2(2) + hallu]);
+                return;
+            }
+        }
+    }
+    if (g.level.flags.has_armory && !rn2(200)) {
+        static const char *const armory_msg[3] = {
+            "the scraping of metal on metal.",
+            "chains clinking.", "the nearby ACME building!",
+        };
+        for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
+            if (DEADMONSTER(mtmp))
+                continue;
+            if ((mtmp->msleeping || 
+                mtmp->data->mlet == 'P' || 
+                mtmp->data->mlet == 'R')
+                && mon_in_room(mtmp, ARMORY)) {
+                You_hear1(armory_msg[rn2(2) + hallu]);
+                return;
+            }
+        }
+    }
+    if (g.level.flags.has_lemurepit && !rn2(20)) {
+        for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
+            if (DEADMONSTER(mtmp)) continue;
+            if ( mtmp->data == &mons[PM_LEMURE]
+            && mon_in_room(mtmp, LEMUREPIT) ) {
+            if (hallu) {
+                switch (rn2(3)) {
+                    case 0:
+                    You_hear("screams of lust!");
+                    break;
+                    case 1:
+                    You_hear("the crack of your mistress's whip!");
+                    break;
+                    case 2:
+                    You_hear("a weeping willow!");
+                    break;
+                }	
+            } else {
+                switch (rn2(6)) {
+                    case 0:
+                    You_hear("the crack of a barbed whip!");
+                    break;
+                    case 1:
+                    You_hear("the screams of tortured souls!");
+                    break;
+                    case 2:
+                    You_hear("a wail of eternal anguish!");
+                    break;
+                    case 3:
+                    You_hear("diabolical laughter!");
+                    break;
+                    case 4:
+                    You_hear("cries of repentance!");
+                    break;
+                    case 5:
+                    You_hear("futile pleas for mercy!");
+                    break;
+                }
+            }
+            return;
             }
         }
     }
@@ -643,8 +731,7 @@ domonnoise(register struct monst* mtmp)
         /* vampire messages are varied by tameness, peacefulness, and time of
          * night */
         boolean isnight = night();
-        boolean kindred = (Upolyd && (u.umonnum == PM_VAMPIRE
-                                      || u.umonnum == PM_VAMPIRE_LEADER));
+        boolean kindred = maybe_polyd(is_vampire(g.youmonst.data), Race_if(PM_VAMPIRE));
         boolean nightchild =
             (Upolyd && (u.umonnum == PM_WOLF || u.umonnum == PM_WINTER_WOLF
                         || u.umonnum == PM_WINTER_WOLF_CUB));
@@ -1000,8 +1087,8 @@ domonnoise(register struct monst* mtmp)
     case MS_GNOLL:
         if (mtmp->mpeaceful) {
             pline("%s cackles conspiratorially.", Monnam(mtmp));
-        /* } else if (mtmp->data == &mons[PM_MOLYDEUS]) {
-            pline("%s cackles at you, then hisses.", Monnam(mtmp)); */
+        } else if (mtmp->data == &mons[PM_MOLYDEUS]) {
+            pline("%s cackles at you, then hisses.", Monnam(mtmp));
         } else {
             pline("%s cackles at you.", Monnam(mtmp));
         }
@@ -1086,7 +1173,7 @@ domonnoise(register struct monst* mtmp)
         /* 3.6 tribute */
         if (ms_Death && !g.context.tribute.Deathnotice
             && (book = u_have_novel()) != 0) {
-            if ((tribtitle = noveltitle(&book->novelidx)) != 0) {
+            if ((tribtitle = noveltitle(&book->novelidx, FALSE)) != 0) {
                 Sprintf(verbuf, "Ah, so you have a copy of /%s/.", tribtitle);
                 /* no Death featured in these two, so exclude them */
                 if (strcmpi(tribtitle, "Snuff")
@@ -1150,7 +1237,7 @@ dochat(void)
 
     if (is_silent(g.youmonst.data)) {
         pline("As %s, you cannot speak.",
-              an(pmname(g.youmonst.data, flags.female ? FEMALE : MALE)));
+              an(pmname(g.youmonst.data, flags.female)));
         return 0;
     }
     if (Strangled) {
@@ -1305,6 +1392,11 @@ dochat(void)
         return 0;
     }
 
+    /* Flag the monster as "known" since the player talked with it. */
+    if (mtmp->mpeaceful) {
+        learn_monster(monsndx(mtmp->data));
+    }
+
     return domonnoise(mtmp);
 }
 
@@ -1403,7 +1495,9 @@ tiphat(void)
         /* if this monster is waiting for something, prod it into action */
         mtmp->mstrategy &= ~STRAT_WAITMASK;
 
-        if (vismon && humanoid(mtmp->data) && mtmp->mpeaceful && !Conflict) {
+        if (mtmp->data == &mons[PM_HEADLESS_RIDER]) {
+            setmangry(mtmp, TRUE);
+        } else if (vismon && humanoid(mtmp->data) && mtmp->mpeaceful && !Conflict) {
             if ((otmp = which_armor(mtmp, W_ARMH)) == 0) {
                 pline("%s waves.", Monnam(mtmp));
             } else if (otmp->cursed) {

@@ -154,7 +154,8 @@ mk_artifact(struct obj *otmp,   /* existing object; ignored if alignment specifi
                 break; /* skip all other candidates */
             } else if (by_align && Role_if(PM_PIRATE)) {
                 continue; /* pirates are not gifted artifacts */
-            }
+            } else if (Hate_material(SILVER) && a->otyp == SABER)
+                continue; /* kludge to stop silver-haters from getting silver */
             /* found something to consider for random selection */
             if (a->alignment != A_NONE || u.ugifts > 0) {
                 /* right alignment, or non-aligned with at least 1
@@ -317,12 +318,12 @@ shade_glare(struct obj *obj)
 {
     const struct artifact *arti;
 
-    /* any silver object is effective */
-    if (objects[obj->otyp].oc_material == SILVER)
+    /* any silver object is effective; bone too, though it gets no bonus */
+    if (obj->material == SILVER || obj->material == BONE)
         return TRUE;
     /* non-silver artifacts with bonus against undead also are effective */
     arti = get_artifact(obj);
-    if (arti && (arti->spfx & SPFX_DFLAG2) && arti->mtype == M2_UNDEAD)
+    if (arti && (arti->spfx & SPFX_DFLAGH) && arti->mtype == MH_UNDEAD)
         return TRUE;
     /* [if there was anything with special bonus against noncorporeals,
        it would be effective too] */
@@ -533,6 +534,10 @@ set_artifact_intrinsic(struct obj *otmp, boolean on, long wp_mask)
          * that can print a message--need to guard against being printed
          * when restoring a game
          */
+        if (u.uroleplay.hallu) {
+            u.uroleplay.hallu = FALSE;
+            pline("The world no longer makes any sense to you! It all looks so... normal?");
+        }
         (void) make_hallucinated((long) !on,
                                  g.program_state.restoring ? FALSE : TRUE,
                                  wp_mask);
@@ -694,9 +699,10 @@ touch_artifact(struct obj *obj, struct monst *mon)
         You("are blasted by %s power!", s_suffix(the(xname(obj))));
         touch_blasted = TRUE;
         dmg = d((Antimagic ? 2 : 4), (self_willed ? 10 : 4));
-        /* add half (maybe quarter) of the usual silver damage bonus */
-        if (objects[obj->otyp].oc_material == SILVER && Hate_silver)
-            tmp = rnd(10), dmg += Maybe_Half_Phys(tmp);
+        /* add half of the usual material damage bonus */
+        if (Hate_material(obj->material)) {
+            dmg += (rnd(sear_damage(obj->material)) / 2) + 1;
+        }
         Sprintf(buf, "touching %s", oart->name);
         losehp(dmg, buf, KILLED_BY); /* magic damage, not physical */
         exercise(A_WIS, FALSE);
@@ -777,11 +783,11 @@ spec_applies(const struct artifact *weap, struct monst *mtmp)
         return (weap->mtype == (unsigned long) ptr->mlet);
     } else if (weap->spfx & SPFX_DFLAG1) {
         return ((ptr->mflags1 & weap->mtype) != 0L);
-    } else if (weap->spfx & SPFX_DFLAG2) {
-        return ((ptr->mflags2 & weap->mtype)
+    } else if (weap->spfx & SPFX_DFLAGH) {
+        return ((ptr->mhflags & weap->mtype)
                 || (yours
                     && ((!Upolyd && (g.urace.selfmask & weap->mtype))
-                        || ((weap->mtype & M2_WERE) && u.ulycn >= LOW_PM))));
+                        || ((weap->mtype & MH_WERE) && u.ulycn >= LOW_PM))));
     } else if (weap->spfx & SPFX_DALIGN) {
         return yours ? (u.ualign.type != weap->alignment)
                      : (ptr->maligntyp == A_NONE
@@ -818,6 +824,8 @@ spec_applies(const struct artifact *weap, struct monst *mtmp)
             return !(yours ? Free_action : FALSE);
         case AD_PSYC:
             return !(yours ? Psychic_resistance : resists_psychic(mtmp));
+        case AD_DGST:
+            return !(yours ? (Fire_resistance && Cold_resistance) : (resists_fire(mtmp) && resists_cold(mtmp)));
         default:
             impossible("Weird weapon special attack.");
         }
@@ -1226,6 +1234,26 @@ artifact_hit(struct monst *magr, struct monst *mdef, struct obj *otmp,
             (void) destroy_mitem(mdef, POTION_CLASS, AD_COLD);
         return realizes_damage;
     }
+    if (attacks(AD_DGST, otmp)) {
+        if (realizes_damage) {
+            pline_The("steaming blade %s %s%c",
+                        !g.spec_dbon_applies ? "hits" : (rn2(2) ? "parboils" : "flash freezes" ), hittee,
+                        !g.spec_dbon_applies ? '.' : '!');
+        }
+        if (!rn2(4))
+            (void) destroy_mitem(mdef, POTION_CLASS, AD_COLD);
+        if (!rn2(4))
+            (void) destroy_mitem(mdef, POTION_CLASS, AD_FIRE);
+        if (!rn2(4))
+            (void) destroy_mitem(mdef, SCROLL_CLASS, AD_FIRE);
+        if (!rn2(7))
+            (void) destroy_mitem(mdef, SPBOOK_CLASS, AD_FIRE);
+        if (!rn2(4))
+            ignite_items(mdef->minvent);
+        if (youdefend && Slimed)
+            burn_away_slime();
+        return realizes_damage;
+    }
     if (attacks(AD_ACID, otmp)) {
         if (realizes_damage)
             pline_The("sizzling sword %s %s%c",
@@ -1359,7 +1387,7 @@ artifact_hit(struct monst *magr, struct monst *mdef, struct obj *otmp,
                 return TRUE;
             }
         } else if ((otmp->oartifact == ART_VORPAL_BLADE
-                   && (dieroll == 1 || mdef->data == &mons[PM_JABBERWOCK])) ||
+                   && (dieroll == 1 || mdef->data == &mons[PM_JABBERWOCK] || mdef->data == &mons[PM_VORPAL_JABBERWOCK])) ||
                           (otmp->oartifact == ART_THIEFBANE && dieroll < 3)) {
             static const char *const behead_msg[2] = { "%s beheads %s!",
                                                        "%s decapitates %s!" };
@@ -1521,6 +1549,14 @@ artifact_hit(struct monst *magr, struct monst *mdef, struct obj *otmp,
         /* some non-living creatures (golems, vortices) are vulnerable to
            life drain effects so can get "<Arti> draws the <life>" feedback */
         const char *life = nonliving(mdef->data) ? "animating force" : "life";
+        if (item_catches_drain(mdef)) {
+            /* This has to go here rather than along with the resists_drli
+             * check; otherwise a drainable item gets drained even if the
+             * attack is a miss.
+             * Return FALSE because no special draining damage happened so we
+             * want the attack to do its regular non-artifact damage. */
+            return FALSE;
+        }
 
         if (!youdefend) {
             int m_lev = (int) mdef->m_lev, /* will be 0 for 1d4 mon */
@@ -2478,12 +2514,12 @@ retouch_object(struct obj **objp, /* might be destroyed or unintentionally dropp
 
     if (touch_artifact(obj, &g.youmonst)) {
         char buf[BUFSZ];
-        int dmg = 0, tmp;
-        boolean ag = (objects[obj->otyp].oc_material == SILVER && Hate_silver),
+        int dmg = 0;
+        boolean hatemat = Hate_material(obj->material),
                 bane = bane_applies(get_artifact(obj), &g.youmonst);
 
         /* nothing else to do if hero can successfully handle this object */
-        if (!ag && !bane)
+        if (!hatemat && !bane)
             return 1;
 
         /* hero can't handle this object, but didn't get touch_artifact()'s
@@ -2494,14 +2530,22 @@ retouch_object(struct obj **objp, /* might be destroyed or unintentionally dropp
         if (!touch_blasted) {
             /* damage is somewhat arbitrary; half the usual 1d20 physical
                for silver, 1d10 magical for <foo>bane, potentially both */
-            if (ag)
-                tmp = rnd(10), dmg += Maybe_Half_Phys(tmp);
+            if (hatemat)
+                dmg += rnd(sear_damage(obj->material) / 2);
             if (bane)
                 dmg += rnd(10);
             Sprintf(buf, "handling %s", killer_xname(obj));
             losehp(dmg, buf, KILLED_BY);
             exercise(A_CON, FALSE);
         }
+        /* concession to elves wishing to use iron gear: don't make them
+         * totally unable to use them. In fact, they can touch them just fine
+         * as long as they're willing to.
+         * In keeping with the flavor of searing vs just pain implemented
+         * everywhere else, only silver is actually unbearable -- other
+         * hated non-silver materials can be used too. */
+        if (!bane && !(hatemat && obj->material == SILVER))
+            return 1;
     }
 
     /* removing a worn item might result in loss of levitation,

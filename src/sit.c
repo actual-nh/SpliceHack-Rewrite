@@ -79,7 +79,7 @@ dosit(void)
             pline("It's probably not a good time for a picnic...");
         } else {
             You("sit on %s.", the(xname(obj)));
-            if (!(Is_box(obj) || objects[obj->otyp].oc_material == CLOTH))
+            if (!(Is_box(obj) || obj->material == CLOTH))
                 pline("It's not very comfortable...");
         }
     } else if (trap != 0 || (u.utrap && (u.utraptype >= TT_LAVA))) {
@@ -143,6 +143,17 @@ dosit(void)
         You(sit_message, "stairs");
     } else if (typ == LADDER) {
         You(sit_message, "ladder");
+    } else if (typ == VENT) {
+        You(sit_message, "grate");
+    } else if (IS_FURNACE(typ)) {
+        You(sit_message, defsyms[S_furnace].explanation);
+        burn_away_slime();
+        if (likes_fire(g.youmonst.data) || Fire_resistance) {
+            pline_The("furnace feels nice and warm.");
+            return 1;
+        }
+        pline("Ouch! The furnace is hot!");
+        losehp(d(1,10), "sitting on a furnace", KILLED_BY);
     } else if (is_lava(u.ux, u.uy)) {
         /* must be WWalking */
         You(sit_message, hliquid("lava"));
@@ -158,6 +169,9 @@ dosit(void)
         You(sit_message, defsyms[S_ice].explanation);
         if (!Cold_resistance)
             pline_The("ice feels cold.");
+    } else if (typ == BRIDGE) {
+        You(sit_message, "bridge");
+        pline_The("bridge sways.");
     } else if (typ == DRAWBRIDGE_DOWN) {
         You(sit_message, "drawbridge");
     } else if (IS_THRONE(typ)) {

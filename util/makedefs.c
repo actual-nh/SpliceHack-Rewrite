@@ -1966,6 +1966,8 @@ do_permonst(void)
             Fprintf(ofp, "\n#define\tPM_");
         if (mons[i].mlet == S_HUMAN && !strncmp(mons[i].pmnames[NEUTRAL], "were", 4))
             Fprintf(ofp, "HUMAN_");
+        if (mons[i].mlet == S_HUMAN && !strncmp(mons[i].pmnames[NEUTRAL], "pack lord", 9))
+            Fprintf(ofp, "HUMAN_");
         for (nam = c = tmpdup(mons[i].pmnames[NEUTRAL]); *c; c++)
             if (*c >= 'a' && *c <= 'z')
                 *c -= (char) ('a' - 'A');
@@ -1981,6 +1983,30 @@ do_permonst(void)
         Fprintf(ofp, "\n};\n");
     } else {
         Fprintf(ofp, "\n\n#define\tNUMMONS\t%d\n", i);
+    }
+    if (use_enum)
+        Fprintf(ofp, "\nenum mtempnums {");
+    for (i = 0; montemplates[i].mlet; i++) {
+        SpinCursor(3);
+        if (use_enum)
+            Fprintf(ofp, "\n        MT_");
+        else
+            Fprintf(ofp, "\n#define\tMT_");
+        for (nam = c = tmpdup(montemplates[i].pmnames[NEUTRAL]); *c; c++)
+            if (*c >= 'a' && *c <= 'z')
+                *c -= (char) ('a' - 'A');
+            else if (*c < 'A' || *c > 'Z')
+                *c = '_';
+        if (use_enum)
+            Fprintf(ofp, "%s = %d,", nam, i);
+        else
+            Fprintf(ofp, "%s\t%d", nam, i);
+    }
+    if (use_enum) {
+        Fprintf(ofp, "\n\n        NUMTEMPLATES = %d", i);
+        Fprintf(ofp, "\n};\n");
+    } else {
+        Fprintf(ofp, "\n\n#define\tNUMTEMPLATES\t%d\n", i);
     }
     Fprintf(ofp, "\n#endif /* PM_H */\n");
     Fclose(ofp);

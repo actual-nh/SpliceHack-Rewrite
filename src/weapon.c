@@ -36,6 +36,14 @@ static void skill_advance(int);
 #define PN_ESCAPE_SPELL (-14)
 #define PN_MATTER_SPELL (-15)
 
+#define PN_FLAMING_FISTS (-16)
+#define PN_FREEZING_FISTS (-17)
+#define PN_SHOCKING_FISTS (-18)
+#define PN_STUNNING_FIST (-19)
+#define PN_BACKSTAB (-20)
+
+#define PN_SPIDER_FRIEND (-21)
+
 static NEARDATA const short skill_names_indices[P_NUM_SKILLS] = {
     0, DAGGER, KNIFE, AXE, PICK_AXE, SHORT_SWORD, BROADSWORD, LONG_SWORD,
     TWO_HANDED_SWORD, SCIMITAR, PN_SABER, CLUB, MACE, MORNING_STAR, FLAIL,
@@ -44,7 +52,13 @@ static NEARDATA const short skill_names_indices[P_NUM_SKILLS] = {
     CROSSBOW, DART, SHURIKEN, BOOMERANG, PN_WHIP, UNICORN_HORN,
     PN_ATTACK_SPELL, PN_HEALING_SPELL, PN_DIVINATION_SPELL,
     PN_ENCHANTMENT_SPELL, PN_CLERIC_SPELL, PN_ESCAPE_SPELL, PN_MATTER_SPELL,
-    PN_BARE_HANDED, PN_TWO_WEAPONS, PN_RIDING
+    PN_BARE_HANDED, PN_TWO_WEAPONS, PN_RIDING,
+
+    PN_FLAMING_FISTS, PN_FREEZING_FISTS, PN_SHOCKING_FISTS, PN_STUNNING_FIST,
+
+    PN_BACKSTAB,
+
+    PN_SPIDER_FRIEND
 };
 
 /* note: entry [0] isn't used */
@@ -53,6 +67,11 @@ static NEARDATA const char *const odd_skill_names[] = {
     "two weapon combat", "riding", "polearms", "saber", "hammer", "firearms",
     "whip", "attack spells", "healing spells", "divination spells",
     "enchantment spells", "clerical spells", "escape spells", "matter spells",
+
+    "flaming fists", "freezing fists", "shocking fists", "stunning fist",
+    "sneak attack",
+
+    "spider friend"
 };
 /* indexed via is_martial() */
 static NEARDATA const char *const barehands_or_martial[] = {
@@ -286,7 +305,7 @@ weapon_distribution_bonus(int otyp, boolean bigmonst, int distribution) {
         case IRON_CHAIN:
         case CROSSBOW_BOLT:
         case MORNING_STAR:
-        case PARTISAN:
+        case NASTY_PIKE:
         case RUNESWORD:
         case ELVEN_BROADSWORD:
         case BROADSWORD:
@@ -424,12 +443,49 @@ dmgval(struct obj *otmp, struct monst *mon)
 
     if (Is_weapon) {
         tmp += otmp->spe;
-        /* negative enchantment mustn't produce negative damage */
-        if (tmp < 0)
-            tmp = 0;
+    /* adjust for various materials */
+#define is_odd_material(obj, mat) \
+    ((obj)->material == (mat) && !(objects[(obj)->otyp].oc_material == (mat)))
+    if ((is_odd_material(otmp, GLASS) || is_odd_material(otmp, ADAMANTINE)
+         || is_odd_material(otmp, GEMSTONE))
+        && (objects[otmp->otyp].oc_dir & (PIERCE | SLASH))) {
+        /* glass, crystal, and adamantine are sharp */
+        tmp += 3;
+    }
+    else if (is_odd_material(otmp, GOLD) || is_odd_material(otmp, PLATINUM)) {
+        /* heavy metals */
+        if (objects[otmp->otyp].oc_dir == WHACK) {
+            tmp += 2;
+        }
+    }
+    else if (is_odd_material(otmp, MINERAL)) {
+        /* stone is heavy */
+        if (objects[otmp->otyp].oc_dir == WHACK) {
+            tmp += 1;
+        }
+    }
+    else if (is_odd_material(otmp, PLASTIC) || is_odd_material(otmp, PAPER)) {
+        /* just terrible weapons all around */
+        tmp -= 2;
+    }
+    else if (is_odd_material(otmp, SLIME)) {
+        /* even worse... */
+        tmp -= 4;
+    }
+    else if (is_odd_material(otmp, WOOD)) {
+        /* poor at holding an edge */
+        if (is_blade(otmp)) {
+            tmp -= 1;
+        }
     }
 
-    if (objects[otyp].oc_material <= LEATHER && thick_skinned(ptr))
+    /* negative modifiers mustn't produce negative damage */
+    if (tmp < 0)
+        tmp = 0;
+
+    }
+
+    if (otmp->material <= LEATHER && thick_skinned(ptr))
         /* thick skinned/scaled creatures don't feel it */
         tmp = 0;
     if (ptr == &mons[PM_SHADE] && !shade_glare(otmp))
@@ -457,8 +513,8 @@ dmgval(struct obj *otmp, struct monst *mon)
             bonus += rnd(4);
         if (is_axe(otmp) && is_wooden(ptr))
             bonus += rnd(4);
-        if (objects[otyp].oc_material == SILVER && mon_hates_silver(mon))
-            bonus += rnd(20);
+        if (mon_hates_material(mon, otmp->material))
+            bonus += rnd(sear_damage(otmp->material));
         if (artifact_light(otmp) && otmp->lamplit && hates_light(ptr))
             bonus += rnd(8);
 
@@ -491,78 +547,212 @@ dmgval(struct obj *otmp, struct monst *mon)
 
 /* check whether blessed and/or silver damage applies for *non-weapon* hit;
    return value is the amount of the extra damage */
+/* Find an object that magr is wearing (or even magr's body itself) that has a
+ * special damaging effect on mdef, and return the amount of bonus damage done.
+ * The most damaging source has precedence; each source that causes special
+ * damage makes its own roll for damage, and the highest roll will be applied.
+ */
 int
 special_dmgval(struct monst *magr,
                struct monst *mdef,
                long armask,       /* armor mask, multiple bits accepted for
                                      W_ARMC|W_ARM|W_ARMU or
                                      W_ARMG|W_RINGL|W_RINGR only */
-               long *silverhit_p) /* output flag mask for silver bonus */
+               struct obj **out_obj) /* ptr to offending object, can be NULL if not wanted */
 {
-    struct obj *obj;
-    struct permonst *ptr = mdef->data;
-    boolean left_ring = (armask & W_RINGL) ? TRUE : FALSE,
-            right_ring = (armask & W_RINGR) ? TRUE : FALSE;
-    long silverhit = 0L;
+    boolean youattack = (magr == &g.youmonst);
+    const int magr_material = monmaterial(monsndx(magr->data));
     int bonus = 0;
+    int tmpbonus = 0;
+    boolean try_body = FALSE;
+    struct obj *gloves    = which_armor(magr, W_ARMG),
+               *helm      = which_armor(magr, W_ARMH),
+               *shield    = which_armor(magr, W_ARMS),
+               *boots     = which_armor(magr, W_ARMF),
+               *armor     = which_armor(magr, W_ARM),
+               *cloak     = which_armor(magr, W_ARMC),
+               *shirt     = which_armor(magr, W_ARMU),
+               *leftring  = (youattack ? uleft : which_armor(magr, W_RINGL)),
+               *rightring = (youattack ? uright : which_armor(magr, W_RINGR));
 
-    obj = 0;
-    if (armask & (W_ARMC | W_ARM | W_ARMU)) {
-        if ((armask & W_ARMC) != 0L
-            && (obj = which_armor(magr, W_ARMC)) != 0)
-            armask = W_ARMC;
-        else if ((armask & W_ARM) != 0L
-                 && (obj = which_armor(magr, W_ARM)) != 0)
-            armask = W_ARM;
-        else if ((armask & W_ARMU) != 0L
-                 && (obj = which_armor(magr, W_ARMU)) != 0)
-            armask = W_ARMU;
-        else
-            armask = 0L;
-    } else if (armask & (W_ARMG | W_RINGL | W_RINGR)) {
-        armask = ((obj = which_armor(magr, W_ARMG)) != 0) ?  W_ARMG : 0L;
-    } else {
-        obj = which_armor(magr, armask);
+    if (out_obj) {
+        *out_obj = 0;
     }
 
-    if (obj) {
-        if (obj->blessed
-            && (is_undead(ptr) || is_demon(ptr) || is_vampshifter(mdef)))
-            bonus += rnd(4);
-        /* the only silver armor is shield of reflection (silver dragon
-           scales refer to color, not material) and the only way to hit
-           with one--aside from throwing--is to wield it and perform a
-           weapon hit, but we include a general check here */
-        if (objects[obj->otyp].oc_material == SILVER
-            && mon_hates_silver(mdef)) {
-            bonus += rnd(20);
-            silverhit |= armask;
-        }
+    /* Simple exclusions where we ignore a certain type of armor because it is
+     * covered by some other equipment. */
+    if (gloves) {
+        leftring = rightring = NULL;
+    }
+    if (cloak) {
+        armor = shirt = NULL;
+    }
+    if (armor) {
+        shirt = NULL;
+    }
 
-    /* when no gloves we check for silver rings (blessed rings ignored) */
-    } else if ((left_ring || right_ring) && magr == &g.youmonst) {
-        if (left_ring && uleft) {
-            if (objects[uleft->otyp].oc_material == SILVER
-                && mon_hates_silver(mdef)) {
-                bonus += rnd(20);
-                silverhit |= W_RINGL;
-            }
-        }
-        if (right_ring && uright) {
-            if (objects[uright->otyp].oc_material == SILVER
-                && mon_hates_silver(mdef)) {
-                /* two silver rings don't give double silver damage
-                   but 'silverhit' messages might be adjusted for them */
-                if (!(silverhit & W_RINGL))
-                    bonus += rnd(20);
-                silverhit |= W_RINGR;
+    /* Cases where we want to count magr's body: the caller indicates a certain
+     * slot is making contact, and magr is not wearing anything in that slot, so
+     * their body must be making contact.
+     * Note: in the gloves case, rings don't prevent magr's body from making
+     * contact. */
+    if (((armask & W_ARMG) && !gloves)
+        || ((armask & W_ARMF) && !boots)
+        || ((armask & W_ARMH) && !helm)
+        || ((armask & (W_ARMC | W_ARM | W_ARMU))
+            && !cloak && !armor && !shirt)) {
+        try_body = TRUE;
+    }
+
+    if (try_body && mon_hates_material(mdef, magr_material)) {
+        bonus = sear_damage(magr_material);
+        if (out_obj)
+            *out_obj = (struct obj *) &cg.zeroobj;
+    }
+
+    /* The order of armor slots in this array doesn't really matter because we
+     * roll for everything that applies and take the highest damage. */
+    struct {
+        long mask;
+        struct obj* obj;
+    } array[9] = {
+        { W_ARMG, gloves },
+        { W_ARMH, helm   },
+        { W_ARMS, shield },
+        { W_ARMF, boots  },
+        { W_ARM,  armor  },
+        { W_ARMC, cloak  },
+        { W_ARMU, shirt  },
+        { W_RINGL, leftring },
+        { W_RINGR, rightring }
+    };
+
+    int i;
+    for (i = 0; i < 9; ++i) {
+        if (array[i].obj && (armask & array[i].mask)) {
+            tmpbonus = dmgval(array[i].obj, mdef);
+            if (tmpbonus > bonus) {
+                bonus = tmpbonus;
+                if (out_obj) {
+                    *out_obj = array[i].obj;
+                }
             }
         }
     }
-
-    if (silverhit_p)
-        *silverhit_p = silverhit;
     return bonus;
+}
+
+/* give a "silver <item> sears <target>" message (or similar for other
+ * material); in addition to weapon hit, this is used for rings, boots for kick,
+ * gloves for punch, or helm for headbutt.
+ */
+void
+searmsg(struct monst *magr, struct monst *mdef, const struct obj *obj, boolean minimal)
+{
+    boolean youattack = (magr == &g.youmonst);
+    boolean youdefend = (mdef == &g.youmonst);
+    boolean has_flesh = (!noncorporeal(mdef->data) && !amorphous(mdef->data));
+
+    if (!obj) {
+        impossible("searmsg: nothing searing?");
+        return;
+    }
+    if (!youdefend && !canspotmon(mdef)) {
+        return;
+    }
+
+    char onamebuf[BUFSZ];
+    char whose[BUFSZ];
+    int mat;
+
+    if (obj == &cg.zeroobj) {
+        mat = monmaterial(monsndx(magr->data));
+        Sprintf(onamebuf, "%s touch", materialnm[mat]);
+        if (youattack) {
+            Strcpy(whose, "your ");
+        }
+        else if (!magr) {
+            impossible("searmsg: non-weapon attack with no aggressor?");
+            return;
+        }
+        else {
+            Strcpy(whose, s_suffix(y_monnam(magr)));
+            Strcat(whose, " ");
+        }
+    }
+    else {
+        mat = obj->material;
+        const char* matname = materialnm[mat];
+
+        /* Why doesn't cxname receive a const struct obj? */
+        char* cxnameobj = cxname((struct obj *) obj);
+
+        /* Make it explicit to the player that this effect is from the material,
+         * by prepending the material, but only if the object's name doesn't
+         * already contain the material string somewhere.  (e.g. "sword" should
+         * turn into "iron sword", but "engraved silver bell" shouldn't turn
+         * into "silver engraved silver bell") */
+        boolean alreadyin = (strstri(cxnameobj, matname) != NULL);
+        if (!alreadyin) {
+            Sprintf(onamebuf, "%s %s", matname, cxnameobj);
+        }
+        else {
+            Strcpy(onamebuf, cxnameobj);
+        }
+        shk_your(whose, (struct obj *) obj);
+    }
+
+    if (minimal) {
+        /* instead of "foo's obj", it will be "the [touch of] <material>;
+         * whose becomes "the" in both cases */
+        Strcpy(whose, "the ");
+        if (mat == SILVER) { /* different formatting */
+            Strcpy(onamebuf, "silver");
+        }
+        else {
+            Sprintf(onamebuf, "touch of %s", materialnm[mat]);
+        }
+    }
+
+    /* "Extra-minimal" case where we don't know what is doing the searing.
+     * Note that this can assume it will be formatting some non-player entity
+     * because it only applies when the player isn't involved. */
+    if (!youattack && !youdefend && !canseemon(mdef) && minimal) {
+        if (mat == SILVER || mat == COLD_IRON) {
+            char defender[BUFSZ];
+            if (has_flesh) {
+                Sprintf(defender, "%s flesh", s_suffix(Monnam(mdef)));
+            }
+            else {
+                Strcpy(defender, Monnam(mdef));
+            }
+            pline("%s is seared!", defender);
+        }
+        else {
+            pline("%s recoils!", Monnam(mdef));
+        }
+        return;
+    }
+
+    /* char* whom = youdefend ? "you" : mon_nam(mdef); */
+    char* whom = mon_nam(mdef);
+    if (youdefend) {
+        Strcpy(whom, "you");
+    }
+
+    if (mat == SILVER || mat == COLD_IRON) { /* more dramatic effects than other materials */
+        /* note: s_suffix returns a modifiable buffer */
+        if (has_flesh)
+            whom = strcat(s_suffix(whom), " flesh");
+
+        pline("%s%s %s %s!", upstart(whose), onamebuf,
+              vtense(onamebuf, "sear"), whom);
+    }
+    else {
+        whom = upstart(whom);
+        pline("%s recoil%s from %s%s!", whom, (youdefend ? "" : "s"),
+              whose, onamebuf);
+    }
 }
 
 /* give a "silver <item> sears <target>" message;
@@ -607,34 +797,40 @@ static struct obj *oselect(struct monst *, int);
 static struct obj *
 oselect(struct monst *mtmp, int x)
 {
-    struct obj *otmp;
+    struct obj *otmp, *obest = 0;
 
     for (otmp = mtmp->minvent; otmp; otmp = otmp->nobj) {
         if (otmp->otyp == x
             /* never select non-cockatrice corpses */
             && !((x == CORPSE || x == EGG)
                  && !touch_petrifies(&mons[otmp->corpsenm]))
-            && (!otmp->oartifact || touch_artifact(otmp, mtmp)))
-            return otmp;
+            && (!otmp->oartifact || touch_artifact(otmp, mtmp))
+            && !mon_hates_material(mtmp, otmp->material)) {
+       	        if (!obest ||
+             		    dmgval(otmp, &g.youmonst) > dmgval(obest, &g.youmonst))
+             		    obest = otmp;
+        }
     }
-    return (struct obj *) 0;
+             	return obest;
 }
 
 /* TODO: have monsters use aklys' throw-and-return */
 static NEARDATA const int rwep[] = {
     FRAG_GRENADE, GAS_GRENADE, BULLET, SHOTGUN_SHELL,
-    DWARVISH_SPEAR, SILVER_SPEAR, ELVEN_SPEAR, SPEAR, ORCISH_SPEAR, JAVELIN,
-    SHURIKEN, YA, SILVER_ARROW, ELVEN_ARROW, DARK_ELVEN_ARROW, ARROW, ORCISH_ARROW,
-    CROSSBOW_BOLT, SILVER_DAGGER, ELVEN_DAGGER, DARK_ELVEN_DAGGER, DAGGER, ORCISH_DAGGER, KNIFE,
-    FLINT, ROCK, LOADSTONE, LUCKSTONE, DART,
-    /* BOOMERANG, */ CREAM_PIE
+    DWARVISH_SPEAR, ELVEN_SPEAR, SPEAR, ORCISH_SPEAR, JAVELIN,
+    THROWING_AXE,
+    SHURIKEN, LIGHT_ARROW, YA, ELVEN_ARROW, DARK_ELVEN_ARROW,
+    ARROW, ORCISH_ARROW,
+    CROSSBOW_BOLT, ELVEN_DAGGER, DARK_ELVEN_DAGGER, DAGGER, ORCISH_DAGGER, KNIFE,
+    FLINT, ROCK, LOADSTONE, LUCKSTONE, DART, PINEAPPLE,
+    /* CHAKRAM, BOOMERANG, */ CREAM_PIE
 };
 
 static NEARDATA const int pwep[] = { SPIKED_CHAIN,
                                      HALBERD,       BARDICHE, SPETUM,
                                      BILL_GUISARME, VOULGE,   RANSEUR,
                                      GUISARME,      GLAIVE,   LUCERN_HAMMER,
-                                     BEC_DE_CORBIN, FAUCHARD, PARTISAN,
+                                     BEC_DE_CORBIN, FAUCHARD, NASTY_PIKE,
                                      LANCE };
 
 /* select a ranged weapon for the monster */
@@ -673,13 +869,12 @@ select_rwep(struct monst *mtmp)
              * Big weapon is basically the same as bimanual.
              * All monsters can wield the remaining weapons.
              */
-            if (((strongmonst(mtmp->data)
+            if ((strongmonst(mtmp->data)
                   && (mtmp->misc_worn_check & W_ARMS) == 0)
-                 || !objects[pwep[i]].oc_bimanual)
-                && (objects[pwep[i]].oc_material != SILVER
-                    || !mon_hates_silver(mtmp))) {
+                 || !objects[pwep[i]].oc_bimanual) {
                 if ((otmp = oselect(mtmp, pwep[i])) != 0
-                    && (otmp == mwep || !mweponly)) {
+                    && (otmp == mwep || !mweponly)
+                    && !mon_hates_material(mtmp, otmp->material)) {
                     g.propellor = otmp; /* force the monster to wield it */
                     return otmp;
                 }
@@ -790,14 +985,15 @@ monmightthrowwep(struct obj *obj)
 static const NEARDATA short hwep[] = {
     CORPSE, /* cockatrice corpse */
     SPIKED_CHAIN,
-    TSURUGI, RUNESWORD, DWARVISH_MATTOCK, TWO_HANDED_SWORD, BATTLE_AXE,
+    TSURUGI, RUNESWORD, ORNATE_MACE, FLAMING_LASH, DWARVISH_MATTOCK,
+    TWO_HANDED_SWORD, BATTLE_AXE,
     KATANA, UNICORN_HORN, CRYSKNIFE, TRIDENT, LONG_SWORD, ELVEN_BROADSWORD,
-    BROADSWORD, SCIMITAR, SILVER_SABER, MORNING_STAR, ELVEN_SHORT_SWORD,
+    BROADSWORD, SCIMITAR, SABER, MORNING_STAR, ELVEN_SHORT_SWORD,
     DARK_ELVEN_SHORT_SWORD,
     DWARVISH_SHORT_SWORD, SHORT_SWORD, ORCISH_SHORT_SWORD, MACE, AXE,
-    DWARVISH_SPEAR, SILVER_SPEAR, ELVEN_SPEAR, SPEAR, ORCISH_SPEAR, FLAIL,
+    DWARVISH_SPEAR, ELVEN_SPEAR, SPEAR, ORCISH_SPEAR, FLAIL,
     BULLWHIP, BASEBALL_BAT, QUARTERSTAFF, JAVELIN, AKLYS, CLUB, PICK_AXE, RUBBER_HOSE,
-    WAR_HAMMER, SILVER_DAGGER, ELVEN_DAGGER, DAGGER, ORCISH_DAGGER, ATHAME,
+    WAR_HAMMER, ELVEN_DAGGER, DAGGER, ORCISH_DAGGER, ATHAME,
     SCALPEL, KNIFE, WORM_TOOTH, RIFLE, PISTOL, AUTO_SHOTGUN, SHOTGUN
 };
 
@@ -815,7 +1011,8 @@ select_hwep(struct monst *mtmp)
         if (otmp->oclass == WEAPON_CLASS && otmp->oartifact
             && touch_artifact(otmp, mtmp)
             && ((strong && !wearing_shield)
-                || !objects[otmp->otyp].oc_bimanual))
+            || !objects[otmp->otyp].oc_bimanual)
+        && !mon_hates_material(mtmp, otmp->material))
             return otmp;
     }
 
@@ -829,9 +1026,7 @@ select_hwep(struct monst *mtmp)
         if (hwep[i] == CORPSE && !(mtmp->misc_worn_check & W_ARMG)
             && !resists_ston(mtmp))
             continue;
-        if (((strong && !wearing_shield) || !objects[hwep[i]].oc_bimanual)
-            && (objects[hwep[i]].oc_material != SILVER
-                || !mon_hates_silver(mtmp)))
+        if ((strong && !wearing_shield) || !objects[hwep[i]].oc_bimanual)
             Oselect(hwep[i]);
     }
 
@@ -1167,13 +1362,45 @@ dry_a_towel(struct obj *obj,
         finish_towel_change(obj, newspe);
 }
 
+/* Express progress of training of a skill as a percentage, where every 100%
+ * represents a full level of possible enhancement, e.g. a basic skill that
+ * returns 150% for this means it can be advanced to skilled and is 50% of the
+ * way to expert. */
+static int
+skill_training_percent(int skill)
+{
+    int percent = 0;
+    int i;
+
+    if (P_RESTRICTED(skill))
+	    return 0;
+
+    if (skill >= P_FIRST_ROLE)
+        return 100;
+
+    for (i = P_SKILL(skill); i < P_MAX_SKILL(skill); i++) {
+        if (P_ADVANCE(skill) >= practice_needed_to_advance(i)) {
+            percent += 100;
+        } else {
+            int mintrain = (i == P_UNSKILLED) ? 0 :
+                practice_needed_to_advance(i - 1);
+            int partial = (P_ADVANCE(skill) - mintrain) * 100 /
+                (practice_needed_to_advance(i) - mintrain);
+            percent += min(partial, 100);
+            break;
+        }
+    }
+
+    return percent;
+}
+
 /* copy the skill level name into the given buffer */
 char *
-skill_level_name(int skill, char *buf)
+skill_level_name(int skill, char *buf, boolean max)
 {
     const char *ptr;
 
-    switch (P_SKILL(skill)) {
+    switch (max ? P_MAX_SKILL(skill) : P_SKILL(skill)) {
     case P_UNSKILLED:
         ptr = "Unskilled";
         break;
@@ -1243,6 +1470,10 @@ can_advance(int skill, boolean speedy)
     if (wizard && speedy)
         return TRUE;
 
+    if (skill >= P_FIRST_ROLE && skill <= P_LAST_ROLE
+        && u.weapon_slots >= slots_required(skill))
+        return TRUE;
+
     return (boolean) ((int) P_ADVANCE(skill)
                       >= practice_needed_to_advance(P_SKILL(skill))
                       && u.weapon_slots >= slots_required(skill));
@@ -1293,6 +1524,8 @@ static const struct skill_range {
     { P_FIRST_H_TO_H, P_LAST_H_TO_H, "Fighting Skills" },
     { P_FIRST_WEAPON, P_LAST_WEAPON, "Weapon Skills" },
     { P_FIRST_SPELL, P_LAST_SPELL, "Spellcasting Skills" },
+    { P_FIRST_ROLE, P_LAST_ROLE, "Role-Specific Skills" },
+    { P_FIRST_RACE, P_LAST_RACE, "Racial Skills" }
 };
 
 /*
@@ -1307,7 +1540,8 @@ int
 enhance_weapon_skill(void)
 {
     int pass, i, n, len, longest, to_advance, eventually_advance, maxxed_cnt;
-    char buf[BUFSZ], sklnambuf[BUFSZ];
+    char buf[BUFSZ], sklnambuf[BUFSZ], percentbuf[BUFSZ];
+    char sklmaxnambuf[80];
     const char *prefix;
     menu_item *selected;
     anything any;
@@ -1397,23 +1631,34 @@ enhance_weapon_skill(void)
                         (to_advance + eventually_advance + maxxed_cnt > 0)
                             ? "    "
                             : "";
-                (void) skill_level_name(i, sklnambuf);
+                (void) skill_level_name(i, sklnambuf, FALSE);
+                (void) skill_level_name(i, sklmaxnambuf, TRUE);
+
+                int percent = skill_training_percent(i);
+                Sprintf(percentbuf, "%5d%%", skill_training_percent(i));
+                boolean maxed = (P_SKILL(i) == P_MAX_SKILL(i));
+                if ((P_SKILL(i) + (percent / 100)) == P_MAX_SKILL(i))
+                    maxed = TRUE;
+
                 if (wizard) {
                     if (!iflags.menu_tab_sep)
                         Snprintf(buf, sizeof(buf), " %s%-*s %-12s %5d(%4d)", prefix,
-                                 longest, P_NAME(i), sklnambuf, P_ADVANCE(i),
-                                 practice_needed_to_advance(P_SKILL(i)));
+                                longest, P_NAME(i), sklnambuf, P_ADVANCE(i),
+                                practice_needed_to_advance(P_SKILL(i)));
                     else
                         Snprintf(buf, sizeof(buf), " %s%s\t%s\t%5d(%4d)", prefix, P_NAME(i),
-                                 sklnambuf, P_ADVANCE(i),
-                                 practice_needed_to_advance(P_SKILL(i)));
+                                sklnambuf, P_ADVANCE(i),
+                                practice_needed_to_advance(P_SKILL(i)));
                 } else {
                     if (!iflags.menu_tab_sep)
-                        Snprintf(buf, sizeof(buf), " %s %-*s [%s]", prefix, longest,
-                                 P_NAME(i), sklnambuf);
+                        Snprintf(buf, sizeof(buf), " %s %-*s [%s/%s]%s", prefix, longest,
+                                P_NAME(i), sklnambuf, sklmaxnambuf, maxed ? " MAX" : !percent ? " " : percentbuf);
                     else
-                        Snprintf(buf, sizeof(buf), " %s%s\t[%s]", prefix, P_NAME(i),
-                                 sklnambuf);
+                        Snprintf(buf, sizeof(buf), " %s%s\t[%s/%s]\t%s", prefix, P_NAME(i),
+                                    sklnambuf,
+                                    sklmaxnambuf,
+                                    maxed ? "   MAX" :
+                                    !percent ? "      " : percentbuf);
                 }
                 any.a_int = can_advance(i, speedy) ? i + 1 : 0;
                 add_menu(win, &nul_glyphinfo, &any, 0, 0,
@@ -1422,7 +1667,7 @@ enhance_weapon_skill(void)
 
         Strcpy(buf, (to_advance > 0) ? "Pick a skill to advance:"
                                      : "Current skills:");
-        if (wizard && !speedy)
+        if (!speedy)
             Sprintf(eos(buf), "  (%d slot%s available)", u.weapon_slots,
                     plur(u.weapon_slots));
         end_menu(win, buf);

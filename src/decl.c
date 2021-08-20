@@ -105,8 +105,9 @@ const char *materialnm[] = { "mysterious", "liquid",  "wax",        "organic",
                              "flesh",      "paper",   "cloth",      "leather",
                              "wooden",     "bone",    "dragonhide", "iron",
                              "metal",      "copper",  "silver",     "gold",
-                             "platinum",   "mithril", "plastic",    "glass",
-                             "gemstone",   "stone" };
+                             "platinum",   "adamantine", "cold iron", "mithril", 
+                             "plastic",    "gelatinous", "glass",     "crystal",   
+                             "shadowspun", "stone" };
 
 char emptystr[] = {0};       /* non-const */
 
@@ -168,7 +169,7 @@ const struct Role urole_init_data = {
     "L", "N", "C",
     "Xxx", "home", "locate",
     NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM, NON_PM,
-    0, 0, 0, 0,
+    0, 0, 0, 0, 0,
     /* Str Int Wis Dex Con Cha */
     { 7, 7, 7, 7, 7, 7 },
     { 20, 15, 15, 20, 20, 10 },
@@ -381,6 +382,7 @@ const struct instance_globals g_init = {
     DUMMY, /* birdname */
     DUMMY, /* dragonname */
     DUMMY, /* ratname */
+    DUMMY, /* monkeyname */
     UNDEFINED_VALUE, /* preferred_pet */
     NULL, /* mydogs */
     NULL, /* migrating_mons */
@@ -623,6 +625,7 @@ const struct instance_globals g_init = {
     TRUE, /* havestate*/
     0, /* ustuck_id */
     0, /* usteed_id */
+    0, /* fearedmon_id */
     (struct obj *) 0, /* looseball */
     (struct obj *) 0, /* loosechain */
 

@@ -4,11 +4,19 @@
 
 Removed Content
 Since this release is a rewrite, a number of pieces of existing content have been heavily altered
-or outright removed. Rationale will be provided for all removed content.
-- Removed the following monsters:
-  - Anubites. Anubites were not interesting to fight, and did not fit the theme of SpliceHack.
+or outright removed. Rationale will be provided for all removed content upon request.
+- Removed the following monsters: Anubites, Nuckelavees, Plant Monsters, Lords of Worms, Penguins,
+  Mystic Scarabs, Memory Hounds.
+- Removed the following objects:
+  - Razor whip.
+  - Robe of the blood magus.
+  - Robe of stasis.
+  - Ring of memory.
+  - Ring of blood magic.
+  - Moonstone.
+  - Scroll of web.
 - The intelligent pet patch from GruntHack has been removed. This patch introduced an incredible
-  number of bugs in monster AI, and additionally made the monster AI code nigh unreadable.
+  number of bugs in monster AI, and made the monster AI code nigh unreadable.
   Additionally, many of the changes made by it were supersceded by later vanilla changes.
 - The Dancer role has been removed. Many of its features were poorly implemented, leading to
   confusion for players. If there is interest in the dancer role being added again, I am open
@@ -21,6 +29,11 @@ or outright removed. Rationale will be provided for all removed content.
   - Timed cooldowns for abilities do not mesh with the pace of NetHack. NetHack is a game that
     often lacks time pressure (the food clock all but disappears past the early game) and so
     techniques incentivize slow, passive play while waiting for used techniques to recharge.
+  - Techniques have been replaced with the skill system, which should allow for much greater build
+    variety and character customization.
+- Removed the monster conversation feature. It was exceedingly poorly implemented.
+- Removed the statuary level. Overtaken by theme rooms.
+- Removed aligned glyph traps. They were more dangerous and less interesting than hoped.
 
 Combat System Changes
 - Luck no longer gives a to-hit bonus.
@@ -32,13 +45,158 @@ Combat System Changes
 - [PLANNED] AC and DR have been split. This system is similar to the one in dnethack, but with
   some significant changes.
 - [PLANNED] Port dnethack BAB?
+- [PLANNED] Role-based power regen?
 - [PLANNED] Dexterity contributes to AC, but the amount it contributes depends on weight?
+
+QOL
+- Added a number of QOL fixes to the wish parser. Many of these were pulled from the NetHack YANI
+  archive.
+  - Wishing for a common community abbreviation, such as comr, boh, or gdsm will result in the
+    appropriate item.
+  - "Blessed greased fixed" can be abbreviated as simply "bgf."
+  - "Scroll of recharging" is a valid alternate spelling for scrolls of charging.
+  - Wishing for "anything" or "surprise me" results in a totally random object.
+  - A number of small easter eggs when wishing for things like "world peace," or "truth."
+- In most situations, there is now a message for when a sleeping monster wakes up. Additionally,
+  looking at a monster will tell you whether it is sleeping.
+- Added some additional messages for dodging attacks in order to spice up combat logs.
+- The skill training menu correctly displays the maximum training possible in a skill.
+- Made unique death messages slightly less silly.
+- Added the monkeyname configuration option for those who want a default name for pet monkeys.
+- Added a number of small easter egg pet names for players who have not set a default pet name.
+- Sabers always display the material they are made from, to prevent confusion for new players.
+- Gods can rarely grant the player a minion. This feature is similar to the one in SLASH'EM, but
+  much more balanced.
+- Added Heaven or Hell mode from AceHack. Enable it by adding "heaven_or_hell" to your config file.
+- The grim reaper can no longer appear in bones files.
+- Wands of wonder now automatically identify themselves when used, and notify the player
+  with a message.
+
+Furnaces
+- Furnaces can be used to combine items. While at a furnace, the player can use the #forge command
+  to combine two items into one more powerful item.
+  - Certain artifacts are only obtainable via furnaces:
+    - Frostburn: Deals double damage to all monsters that are not both cold and fire resistant.
+      Created by fusing Frost Brand and Fire Brand.
+
+Skill System
+- Rather than techniques, SpliceHack uses a skill system.
+- In addition to the regular skills offered in NetHack, roles and races provide access to their
+  own sets of skills. By investing points in these skills, a character can use unique abilities,
+  or increase the power of their existing special abilities.
+- Ideally, this should open the way for numerous diverse character builds, as well as help to
+  offset the increased difficulty of new features.
+- Tourists are unique in that they have no special skills of their own, but can attain basic
+  levels in numerous skills from other roles.
+- A full list of skills and what they do can be found in an attached text document.
+
+Dungeon Changes
+One goal of this release of SpliceHack is to make regular dungeon levels more interesting and
+dynamic to explore. Each level should present unique challenges and be interesting to explore
+in its own way.
+- New Dungeon Feature: Vents
+  - Emit clouds of gas at a predictable interval, allowing players to plan around them or
+    use them to their advantage.
+  - Vents can emit poison gas or harmless mist. This is random, but influenced by the
+    dungeon level.
+- New Dungeon Feature: Rope Bridges
+  - Rope bridges are vulnerable to fire, and can be destroyed by exposing them to it.
+  - When a tile of a rope bridge is destroyed, a countdown begins for all adjacent bridge
+    tiles. When this countdown ends, that tile will collapse as well.
+- Many levels generate with rope bridges. This replaces the underground rivers patch.
+- All rooms are dark by default, but generate with a torch sconce that helps to light them up.
+  As depth increases, sconces become less and less common.
+- Ported the Rat King level from Slash'Em, with some alterations.
+  - The Rat King is a valid polymorph form and has hands.
+  - SpliceHack pack rats are used, rather than Slash'Em pack rats.
+  - Black rats cannot be genocided.
+  - The rat king level generates in 25% of games, rather than 50%.
+  - Contains a guaranteed bag of rats.
+- Added a flag to dungeon generation that allows the disabling of food in specific branches. This
+  will allow for adding an arbitrary number of branches in the future, since exploring a branch
+  will now have an associated cost (the user's hunger).
+- Food items generate significantly less frequently in Gehennom than in the main dungeon. In Gehennom,
+  food items are generated as frequently as amulets are in the main dungeon. Hopefully this makes
+  the food stash at the castle much more important.
 
 Monster Changes
 - Many monsters have gender-variant names. For example, female pigs are sows.
 - Altered the tiles for gnolls again to bring them closer in line with other humanoid tiles.
+- Gnolls have been reduced to medium size so that they can wear the armor they spawn with.
+- Monster fleeing AI has been altered.
+  - When a monster turns to flee, it immediately gains a turn of movement points.
+  - Fleeing monsters gain bonus movement points every turn, allowing them to flee
+    more quickly.
+- Certain monsters are classed as supporters. These monsters can heal their compatriots, and
+  will attempt to hang back slightly from the player.
+- Monsters that small in small groups can spawn with leaders or supporting monsters.
 - New Yendorian Army Member: The General
   - Upgraded form of the captain. Highly dangerous, and very rare to encounter.
+- New Monster: The Slumber Hulk
+  - A hulk that puts people to sleep with its gaze.
+  - Very low AC.
+  - Falls asleep randomly.
+- New Monster: Eye of Fear and Flame
+  - L-class monster.
+  - Two gaze attacks: One deals fire damage, and the other inflicts fear.
+- New Monster: Bodak
+  - Fear-inflicting gaze attack.
+  - Dying while under the effect of a bodak's gaze will cause the player to rise
+    as a bodak.
+  - Attempt to avoid the player unless the player has less than one quarter of their
+    hit points remaining.
+  - Peaceful to neutral characters.
+- New Adult Monsters: Killer Croc, Diamond Piercer
+  - Not randomly generated.
+  - Only appear when a lower level monster grows up.
+- Ported UnnetHack Aleaxes: Aleaxes are generated with copies of the player's items.
+- Purple dragons have been renamed to violet dragons.
+- Dragons have been significantly altered.
+  - Dragons have adjectives attached to their names that describe their age categories. 
+    The level of a dragon determines its age category.
+  - The higher level a dragon is, the more damage its breath weapon will deal.
+  - Blue dragons butt with a horn rather than using claws.
+  - Black dragons are treated as having a pair of horns.
+  - Dragons have a chance of roaring at the player. This roar can inflict the afraid status effect,
+    making the player flee from the dragon.
+  - In order to offset many of their more powerful abilities, dragons periodically fall
+    asleep and wake up. Running from a dragon and hoping it falls asleep is a valid strategy.
+  - When dragons age up, they may invoke the right to name themselves. Dragons encountered in the
+    dungeon have an age-category-based chance to be named.
+- Demons that the player has not yet learned about are simply referred to as "demons" and have
+  a generic appearance. As soon as the player learns the identity of a demon, the demon will be
+  identified and will have the correct tile.
+  - The rationale for this feature is that it helps ensure that the late game still has some sort
+    of identification and undertainty mechanics. Gehennom doesn't have to be the end of discovery!
+- Templated Monsters
+  - Monsters can spawn with templates applied to them, such as "fiendish," "elven," or "half-illithid."
+    These templates modify the data of the monster, making them more dangerous.
+  - Your starting pet can rarely spawn with a template applied to it.
+  - Many traditionally human monsters can have their race randomly altered.
+  - Templated monsters grant extra experience, and are guaranteed to have a death drop.
+  - TODO: Update visual indicator for templated mons in windows ports using certain files.
+- Brood Wasp Changes
+  - Brood wasps have been renamed to Ichneumon. Carrying larva is no longer considered a curable trouble.
+  - Having larvae hatch inside you deals 1d5 damage, then halves your hit points.
+  - Drinking a potion of sickness kills all larvae.
+- The Dark One is no longer a human.
+- Allow grid bugs to grow up into more powerful electric bugs.
+- Piercers can grow up into more powerful piercers. This includes god piercers, which
+  have been significantly altered.
+- Dust vorticies can grow up into dust devils.
+- Polymorphing into a nosferatu drops your charisma to 3.
+
+Object Changes
+- Zapping a wand of water at an item will extinguish it.
+- Masks last longer and give an indication that they are wearing out.
+- Coffins are always trapped, and looting them will occasionally produce
+  vampires.
+- Shields of resonance renamed to resonant shields. Appearance changed from "vibrating"
+  to "humming," since having a shield that's just constantly vibrating is kind of weird.
+- Changed the name of "helm of opaque thoughts" to "tinfoil hat."
+- Combined scrolls of warp weapon and warp armor into a single scroll: Scroll of change material.
+- Altered scroll generation properties.
+- Chains of Malcanthet deal extra to demons instead of minions.
 
 Race Changes
 - Drow
@@ -46,6 +204,27 @@ Race Changes
   - Potions of sickness in the starting inventories of drow are replaced by potions of sleeping.
   - The unarmed attacks of drow no longer inflict sleep.
   - All weapons in the starting inventory of drow are automatically drugged.
+  - Drow automatically worship the goddess Lolth.
+- Infernal
+  - Infernals no longer receive hungerless regeneration.
+  - Infernals are automatically hated by all humans (aside from quest
+    monsters).
+  - Infernals automatically recognize all demons.
+- Vampire
+  - Vampires no longer feed by draining corpses. Instead, they gain a larger amount of
+    nutrition from draining the blood of living monsters. This change is due to player
+    dissatisfaction with the tedium of draining blood from corpses, as well as the
+    large number of bugs that the corpse draining code introduced to the game.
+- Different races have different night vision ranges.
+
+Role Changes
+- Dragon Rider
+  - Rename dragonmasters to dragon riders. This name change puts greater emphasis on the bond the
+    character has with dragons.
+  - Allow baby black dragons as starting pets.
+- Priest
+  - Priests can be of any race.
+- Added a few new role/race/alignment combinations.
 
 Interface Changes
 - Ridden monsters are highlighted in bright magenta.
@@ -53,6 +232,7 @@ Interface Changes
 - Weapons and Armor now display their approximate AC, attack bonus, and damage.
   - As a bonus, this allows the player to distinguish "fake artifacts" from real artifacts.
 - Approximate attack bonus is displayed on the bottom line.
+- The walls of the black market have unique tiles in graphical builds.
 
 Balancing
 - Potions of paralysis injected via dipped weapons no longer paralyze monsters for rnd(25) turns.
@@ -60,6 +240,12 @@ Balancing
   remains a very strong option.
 - Increased generation of items that have been dipped in random potions from one in 10000 to one
   in 800 poisonable objects.
+- Converting an altar will ALWAYS result in a minion of that deity being summoned.
+- *Very* rarely, objects in the player's starting inventory may be of an odd material.
+- A user can pray to reduce their hunger normally once. Every subsequent prayer used to reduce
+  their hunger increases the total time of their prayer timeout. This is meant to eliminate slow,
+  degenerate play, and should not affect regular players much.
+- While the player is level one, they get hungry much more slowly.
 
 Minor Changes
 - Double-headed axes are now referred to as "double-bitted."
@@ -70,16 +256,15 @@ Bug Fixes
   crashes and instances of odd behavior that previously went unnoticed have been fixed.
 - Graphical tiles builds work once more! Rejoice!
 - Fixed lighting shops randomly generating throughout the dungeon.
+- Fixed parrots not using the birdname option from a config file.
+- Fixed grenade explosions being treated as if they were caused by the player, even when they
+  were not.
+
+Known Bugs
+- Rare failed sanity check for improper mon data, possibly due to vampiric monsters shapeshifting.
+- Removing a mask that transformed you into a light-emitting monster will cause a program in disorder.
 
                             Version 0.8.3
-
-Chatting
-- Chatting with a monster yields a number of different dialogue options.
-  - Pet: Pet an animal, because why not? :)
-  - Compliment: Compliment a monster. Make the dungeon a nicer place.
-  - Threaten: Make a monster angry.
-  - Recruit: Recruit a peaceful monster to fight for you. Requires a successful charisma check.
-    Based on a YANI by aosdict and FIQ.
 
 New Materials
 - Slime
@@ -313,9 +498,6 @@ QOL
   headers to the information window, since it can sometimes be difficult to
   remember what information you are viewing. The other, more minor change is
   disabling the bolding in the monster display menu.
-- Removed the tips displayed about the role and race during the start of the
-  game. The way in which they were coded was a huge hack, and it was not
-  terribly useful.
 - Change the SpliceHack tip of the day to an engraving in the dust.
 - Having earmuffs on will no longer cause enlightenment to display "sonic resistance."
 - Display the number of times that the player has violated the celibate conduct
@@ -355,10 +537,6 @@ New Artifacts
   - The fuse is ALWAYS three turns long. Not five.
 
 Artifact Changes
-- Anaconda
-  - Removed.
-- Unlimited Moon
-  - Removed.
 - Excalibur
   - Can be invoked for an incredibly powerful fire blast, but only when the user
     is carrying Avalon.
@@ -434,10 +612,8 @@ Race Changes
   - Dwarves start all games with some booze.
   - Dwarves receive mattocks instead of picks in starting inventories.
 - Ghoul
-  - Removed grafting system.
   - Ghouls can eat non-meat objects.
   - Ghouls, like convicts, can last twice as long at hungry and below.
-  - Ghouls gain the revification technique at level 10.
   - Ghouls get stronger the hungrier they are, and do not suffer abuse penalties
     from being hungry.
     - When at least hungry, ghouls gain 4 strength and 4 dexterity.
@@ -495,16 +671,9 @@ Role Changes
   - Dragonmasters start with an intrinsic depending on the type of dragon
     they begin the game with.
 - Cartomancer
-  - Removed the card response feature, since it incentivized players not to use scrolls.
-  - Removed the chance not to use up scrolls when reading them.
   - Any monster killed by a cartomancer has a 50% chance of dropping as a spell card.
   - Fading monsters summoned by scrolls remain for a much shorter period of time.
   - Updated summon card naming.
-- Dancer
-  - Dances now function in a manner much more akin to a stance system, where a dance
-    can be active for an arbitrarily long amount of time.
-  - Dancers are no longer prevented from wearing body armor.
-  - Dancer messages are much less annoying now.
 - Knight
   - Allow chaotic knights.
 - Pirate
@@ -535,7 +704,6 @@ Miscelaneous
 - Balrog have been made much more threatening.
   - Balrog leave behind a cloud of smoke when they move.
   - Balrog spawn with a flaming lash, and will prioritize wielding it.
-- Removed the void branch.
 - Being deaf does not make you resistant to sonic attacks.
 - War hammers deal d12 damage, instead of d4, buffing both Giantslayer and Mjollnir.
 - Bell of opening reverted to a silver bell.
@@ -592,19 +760,13 @@ Sounds
 - Changed the ill-fated option to illfated.
 
 User Friendliness / QOL Features
-- Technique information has been added to the database, and knwon techniques can be
-  quickly looked up using the whatis command.
-- The technique menu can be opened with '!' for quick access.
 - Added numerous database entries. Most creatures should now have some sort
   of entry associated.
-- Stop randomly generating penguins, since the fact that eating them makes the
-  Gods angry confused many players.
 - Magma elementals and storm elementals only spawn in Gehennom.
   - People have complained about these blocking access to dungeon corridors,
     and it makes thematic sense for them to appear in Gehennom, at which
     point the player has numerous methods to bypass magma.
 - Merfolk can be valkyrie.
-- Removed altar destruction nerf temporarily.
 - Lit corridors defaults to "On."
 
 New Monsters
@@ -617,8 +779,6 @@ New Monsters
     orctown gang has been changed to an orc warlord.
 - New Monster: Guard Dog
   - Dog counterpart to fat cats.
-- New Monster: Tuxedo Penguin
-  - Penguin counterpart to fat cats.
 - New Monster: Mud Elemental
   - Mud Elementals are not randomly generated. They only appear when
     an earth elemental is zapped with a wand of water, or as a minion of
@@ -727,7 +887,6 @@ New Items
     dealing with hordes of insects on the astral plane. Jumping on a monster while
     hallucinating yields YAFM.
 - New Item: Sewing Kit
-  - Usable by ghouls for grafting purposes (see below)
   - Can repair cloth and leather items.
 - New Item: Orcish War Juice
   - Heals orcs, removes stun / confusion, and increases strength, at the cost of
@@ -768,23 +927,6 @@ New Special Materials
   - Edged crystal weapons deal +3 damage.
 
 Role Changes
-- New Role: Dancer
-  - The dancer is a glass cannon. They have low hit points and cannot wear suits of
-    armor (doing so would inhibit their dance moves) but are fast and capable of dishing
-    out large amounts of damage.
-  - Whenever you hit a monster, your combo counter starts. If the combo counter decreases
-    to zero without a manual reset, you faint and are paralyzed for a few turns.
-  - Dances can be thought of as being similar to "stances," from fighting games. To
-  - Whenever you hit a monster, your combo counter increases.
-  - If your combo crosses a numeric threshold, you get a certain effect and generally
-    the combo counter resets. The threshold and effect are dependent upon
-    the active dance.
-  - As you level up, you learn new dances.
-  - Quest Nemesis is the Time Elemental.
-  - Quest Artifact is the Power Pole. Grants luck, protection, and sonic resistance when
-    carried. Invoke to gain temporary fire, cold, acid, and shock resistance, as well as
-    the effects of a blessed scroll of elementalism.
-  - Minions appearing for dancers are always some type of elemental.
 - Dramatically improve dragonmaster starting inventory.
 
 Racial Changes
@@ -792,7 +934,6 @@ Racial Changes
   - #chat to a monster to polymorph into it. The monster's base level must be of 
     no more than three levels higher than the player, and requires a large amount
     of energy.
-  - Liquid leap technique.
   - Do not passively gain hit points without a special source of regeneration,
     unless polymorphed.
   - Hate iron in their natural form.
@@ -818,16 +959,6 @@ Dungeon Changes
   fun to navigate.
 
 Misc. Changes
-- Changed the name of substance warpers to transmuters.
-- Changed the name of nova foxes to vulpenfernoes.
-- Changed the name of death maggots to corpseworms.
-- Changed the name of red caps to redcaps.
-- Changed the name of earthsharks to landsharks.
-- Changed the name of bone beasts to crawling cemeteries.
-- Changed the name of thought hounds to thought eaters.
-- Some techniques have had their names changed to be more interesting.
-- Techniques that made the player imobile now have death messages if killed while
-  immobile from them.
 - Circe's Witchstaff only transforms monsters into pigs now.
 - Added many new demon and angel maledictions.
 - Many monsters are capable of charging at the player from a distance, allowing
@@ -950,7 +1081,7 @@ Dungeon Changes
 - The Banquet Hall, found in the level just above Mine's End. A very large
   throne room containing numerous dwarves and giants. Loot includes historic
   statues, potions of booze, kegs, and a throne.
-- The Dark Forest. Contains a gauranteed moonstone, gaurded by an army of
+- The Dark Forest. Contains a guaranteed moonstone, guarded by an army of
   bizarre werecreatures.
 
 Endgame Rewrite
@@ -989,16 +1120,11 @@ Monsters
     - Can cause fumbling with his attack.
 - New Monster: Gold Dragon
     - Sourced from Nephi's Gold Dragon Patch.
-- New Monster: Vent Wurm
-  - Only appears in the planes.
-- New Monster: Crevasse Wurm
-  - Only appears in the planes.
-- New Monster: God Piercer
-  - Only appears in the planes.
-- New Monster: Efreet
-  - Only appears in the planes.
-- New Monster: Dream Thief
-  - Only appears in the planes.
+- New Monster: Vent Wurm (Only appears in the planes.)
+- New Monster: Crevasse Wurm (Only appears in the planes.)
+- New Monster: God Piercer (Only appears in the planes.)
+- New Monster: Efreet (Only appears in the planes.)
+- New Monster: Dream Thief (Only appears in the planes.)
 - New Monster: Werecockatrice
   - Only appears in the Dark Forest.
   - Petrifies on touch, just like a cockatrice.
@@ -1049,8 +1175,6 @@ Monsters
   the player hurtling with their attacks.
 - Switch to XNetHack's system of monster naming and introduction.
 - Monsters are no longer affected by the mysteriuos force.
-- Bird pets have been changed to penguins, which have the same stats as cats
-  and dogs.
 - Demon lords and princes can steal intrinsics, deal damage, and cause the player to
   wither by chanting in the dark speech.
 - Implemented EvilHack buffs to the steeds of the riders.
@@ -1132,17 +1256,10 @@ Artifacts
 - New Artifact: Circe's Witchstaff
   - Has a 1/20 chance of polymorphing the target into a boar or a
     cow.
-- New Artifact: Anaconda.
-  - Artifact bullwhip. Replaces Final.
-  - +1d7 to hit and damage.
-  - Has a 1/7 chance of wrapping the target in magic coils, paralyzing them
-    for two turns.
-- Removed the King in Yellow.
 - Mjollnir can now be invoked for a powerful lightning bolt. From XNetHack.
 - Altars have a 50% chance to break apart when an artifact is granted once the
   player has already been gifted two artifacts.
-- Increased damage for Unlimited Moon, Gae Dearg, Gae Buidhe, Carnwennan,
-  Seafoam, War's Sword, Origin.
+- Buffed Gae Dearg, Gae Buidhe, Carnwennan, Seafoam, War's Sword, Origin.
 - Most artifacts have a special incantation recited by the player when invoked.
 - New Invocation Effects
     - Imhullu: As blessed scroll of air.
@@ -1200,9 +1317,6 @@ Roles, Races, and Character Creation
 - Dragonmaster Changes 
   - Dragonmasters now start with a random type of pet dragon (except
     black).
-  - Dragons summoned by the Dragon Call technique only have a 50%
-    chance of being friendly, and the baby dragons can be of any
-    type.
   - Dragonmasters can no longer eat dragons without it being considered
     cannibalism. In exchange, they gain intrinsics on level up. This is
     from SliceHack.
@@ -1212,15 +1326,8 @@ Roles, Races, and Character Creation
     (unless cursed) will summon a tame version of the monster to fight by
     the side of the player.
   - Cartomancers start with create monster scrolls keyed to random monsters.
-  - The Soul of the Cards technique gives the cartomancer a card which might
-    fix their current problem (or a random card otherwise) and instantly
-    reads it.
   - Cartomancers can use decks of cards as if blessed.
-  - Cartomancers have a new technique: Card Capture.
-    Card Capture allows a cartomancer to morph a nearby monster into a
-    spell card, then play that card to create a tame version of them.
 - Merfolk Changes
-  - Undertow has a failure rate
   - Remove turning 1/3 of levels into rivers.
 
 Features
@@ -1236,12 +1343,8 @@ Features
 - Additional sounds and YAFMS for chatting with various monsters.
 - Monsters in the endgame attempt to find altars to sacrifice the amulet on
   if they manage to steal it.
-- Crowning grants the player character a unique technique dependent on their
-  alignment.
-- Improved formatting for the technique menu.
 - Masks are generated randomly from the list of monsters, making the chance 
   of obtaining a useful mask much higher.
-- Track the number of techniques used in a game as a conduct.
 - Track the celibate conduct.
 - Withering status effect. Blocks normal HP regeneration, and causes the
   player to lose 1 HP per turn. Having regeneration and withering at the
@@ -1256,9 +1359,6 @@ Fixes
 - Expensive cameras used by monsters will hurt players that are polymorphed into
   light-hating monsters.
 - Fixed boabhan-sith spawning as random monsters.
-- Fixed intelligent pet patch issue where monsters would repeatedly wield polearms.
-- Fixed intelligent pet patch issue where monsters would treat polearms as having
-  the same range as bows, and would stand motionless far away from the player.
 - Fixed inconsistent cause of death across livelog, top ten list, and gravestone
   when receiving a random death message.
 - Fixed monster steeds not teleporting with their masters, lagging behind by
@@ -1313,12 +1413,10 @@ New Monsters
       Conversely, they are one of the most dangerous to your own pets.
 - Hippo
     - Hippos are fairly unremarkable. They yawn when angry, just like real
-      hippos. They are also quite dangerous and aggressive, just like real
-      hippos.
+      hippos. They are also dangerous and aggressive, just like real hippos.
 
 Bug Fixes
 - Numerous fixes to monster steeds.
-- Fixed glyph traps exploding in blasts of lightning.
 - Fixed Dal Zethire instantly dying.
 - Alucard no longer begins polymorphed, which should fix the bad weapon restore
   errors players were running into during Junethack.
@@ -1393,8 +1491,6 @@ Features
   them to stunlock the player.
 - Junk shops: Junk shops sell a variety of "junk items"
 - T-Rexes have been changed from white to red for clarity purposes.
-- Removed rooks. In terms of flavor, they simply do not fit, and are not
-  interesting.
 - Roles and races receive tips on the start of the game.
 
 New Items
@@ -1411,7 +1507,6 @@ New Monsters
 - Mystery Gel
 
 New Traps
-- Aligned Glyph
 - Whirlwind Trap
 
 Bug Fixes
@@ -1438,12 +1533,8 @@ Nonbinary Characters
   "Caveperson" and "Magister."
 
 Patches Introduced
-- SLASH'EM techniques have been implemented.
 - Updated XNetHack object materials patch.
 - Livelogging of players killing their own pet (XNetHack).
-- SGrunt's intelligent pets patch has been implemented and updated for 3.6.
-  - This means that casting monster spells when polymorphed is possible.
-  - Monsters will use ranged weapons, attacks, and spells to attack one another.
 
 Balance Changes
 - Scroll writing costs have been adjusted in order to cut down on abuse of
@@ -1452,8 +1543,7 @@ Balance Changes
   one would need for the rest of the game, and then writing a ton of time
   scrolls to breeze through Astral. Scrolls of time are as expensive to write
   as genocide, while scrolls of knowledge cannot be written at all.
-- Ported FIQHack's XP Curve, which mean leveling up happens more often in the
-  endgame.
+- Ported FIQHack's XP Curve, resulting in more leveling up during the endgame.
 - Monster application of figurines now functions more similarly to how the
   player applies figurines, meaning that the monsters generated are not always
   aggressive.
@@ -1471,45 +1561,22 @@ Balance Changes
   against walls.
 
 Role and Race Changes
-- Cartomancers play completely differently now. They can identify the rarity of
-  various cards, and when they play a card in range of the monster that monster
-  has a chance to respond with a card of their own. Cartomancers also have
-  access to several new techniques. Hopefully, all of this should combine to
-  make them a more interesting role to play.
-- Dragonmasters have access to completely new techniques. Their quest has been
-  modified, with the nemesis actually riding the dragon. They also actually have
-  a decent selection of skills now.
-- Master Kaen can block the pummel technique of a monk.
-- Merfolk are a much stronger race than before, since they get access to one of
-  the most powerful techniques in the game. As a tradeoff, levels often generate
-  with rivers in them.
-- The role selection for infernals and merfolk has changed.
+- Cartomancers can identify the rarity of various cards.
 - The lycanthrope race functions very similarly to SLASH'EM's werewolf race now.
 
 Dungeon Changes
-- Gehennom is now extremely compact, and the second fake wizard's tower has
-  been removed.
+- Gehennom is now extremely compact, and the second fake wizard's tower is gone.
 - The main branch of the dungeon is ten levels longer, and you can encounter a
   big room up to three times.
 - The first level of Vlad's tower includes a massive courtyard and is guarded by
   Alucard.
-- The void has been reinstated and completely reworked. It still contains a void
-  dragon and dangerous monsters, but now holds portals to many different points
-  across the dungeon. You cannot use this in order to bypass the ascension run,
-  so don't even think about it.
+- The void has been reworked. It still contains a void dragon and dangerous 
+  monsters, but now holds portals to many different points across the dungeon.
+  You cannot use this to bypass the ascension run, so don't even think about it.
 
 New Monsters
 - Ported shambling horrors from Unnethack. Given the numerous damage types in
   SpliceHack, they can end up being absolutely ridiculous.
-- Various Fantastical Plants (characterized by high magic resistance, low speed,
-  and vulnerability to drain):
-  - Walking Oak
-  - Walking Birch
-  - Walking Willow
-  - Creeping Kudzu
-  - Giant Sundew
-  - Wander Cactus
-  - Crazy Cactus
 - Lots of Bears:
   - Bear
   - Drop Bear
@@ -1540,7 +1607,6 @@ New Monsters
   - Yuki-Onna
   - Substance Warper
   - Alucard
-  - Anubite
   - Mad Alchemist
   - Herald Archon
   - Avenger Archon
@@ -1644,14 +1710,11 @@ New Monsters (12)
   teleport the player.
 - Ancient Brain, a unique monster appearing in the laboratory. It cannot move,
   but can fire psychic rays and cast spells.
-- Nuckelavee, a new type of demon with poison breath.
 - Cheshire cats. They are very rare and only spawn in Gehennom. They have
   displacement, and making them invisible gives YAFM.
 - Ported SLASH'EM's Zouthern animals, of which there are eight. Some of these
   animals have had their damage output nerfed from SLASH'EM in order to match
   the balance of SpliceHack.
-- Animated statues have been completely removed and replaced with chess rooks,
-  which like grid bugs can only move in straight lines.
 
 New Objects (3)
 - Orb of permafrost, an orb that causes an icy explosion when thrown.

@@ -11,6 +11,11 @@
 #define Your_Own_Race(mndx)  \
     ((mndx) == g.urace.malenum \
      || (g.urace.femalenum != NON_PM && (mndx) == g.urace.femalenum))
+/* For create_critters and demonology... */
+#define MAKE_EM_NATURAL		0	/* Create monsters... */
+#define MAKE_EM_HOSTILE		1	/* Create hostile monsters... */
+#define MAKE_EM_PEACEFUL	2	/* Create peaceful monsters... */
+#define MAKE_EM_TAME		3	/* Create tamed monsters... */
 
 static boolean learnscrolltyp(short);
 static void cap_spe(struct obj *);
@@ -19,7 +24,10 @@ static int read_ok(struct obj *);
 static void stripspe(struct obj *);
 static void p_glow1(struct obj *);
 static void p_glow2(struct obj *, const char *);
-static void forget(int);
+static void set_dark(int,int,genericptr_t);
+static void randomize(int *, int);
+static void forget_single_object(int);
+static void specified_id(void);
 static int maybe_tame(struct monst *, struct obj *);
 static boolean get_valid_stinking_cloud_pos(int, int);
 static boolean is_valid_stinking_cloud_pos(int, int, boolean);
@@ -552,7 +560,7 @@ stripspe(register struct obj* obj)
         pline("%s briefly.", Yobjnam2(obj, "vibrate"));
         costly_alteration(obj, COST_UNCHRG);
         obj->spe = 0;
-        if (obj->otyp == OIL_LAMP || obj->otyp == BRASS_LANTERN)
+        if (obj->otyp == OIL_LAMP || obj->otyp == LANTERN)
             obj->age = 0;
     }
 }
@@ -589,7 +597,7 @@ charge_ok(struct obj* obj)
 
     if (obj->oclass == TOOL_CLASS) {
         /* suggest tools that aren't oc_charged but can still be recharged */
-        if (obj->otyp == BRASS_LANTERN
+        if (obj->otyp == LANTERN
             || (obj->otyp == OIL_LAMP)
             /* only list magic lamps if they are not identified yet */
             || (obj->otyp == MAGIC_LAMP
@@ -768,7 +776,7 @@ recharge(struct obj* obj, int curse_bless)
             }
             break;
         case OIL_LAMP:
-        case BRASS_LANTERN:
+        case LANTERN:
             if (is_cursed) {
                 stripspe(obj);
                 if (obj->lamplit) {
@@ -830,6 +838,7 @@ recharge(struct obj* obj, int curse_bless)
             break;
         case HORN_OF_PLENTY:
         case BAG_OF_TRICKS:
+        case BAG_OF_RATS:
         case CAN_OF_GREASE:
             if (is_cursed) {
                 stripspe(obj);
@@ -852,6 +861,7 @@ recharge(struct obj* obj, int curse_bless)
         case MAGIC_HARP:
         case FROST_HORN:
         case FIRE_HORN:
+        case HORN_OF_BLASTING:
         case DRUM_OF_EARTHQUAKE:
             if (is_cursed) {
                 stripspe(obj);
@@ -882,6 +892,193 @@ recharge(struct obj* obj, int curse_bless)
     cap_spe(obj);
 }
 
+static void
+set_dark(int x, int y, genericptr_t val)
+/* *val comes in as 0 if blind, -1, 1, or 2 otherwise
+ *val leaves as 0 if blind
+               -1 if darkness hit you at sometime
+                2 if you saw darkness, but it hasn't
+                1 if you haven't seen darkness yet
+                     yet hit you */
+{
+    char * nblind = (char *) val;
+    register struct obj *otmp;
+    if (u.ux == x && u.uy == y) {
+        if (* nblind) {
+            *nblind = -1;
+            if (uwep && artifact_light(uwep) && uwep->lamplit)
+                pline("Suddenly, the only light left comes from %s!",
+                    the(xname(uwep)));
+        else
+            You("are surrounded by darkness!");
+        }
+        /* the magic douses lamps, et al, too */
+        for(otmp = g.invent; otmp; otmp = otmp->nobj)
+            if (otmp->lamplit)
+                (void) snuff_lit(otmp);
+    } else {
+        struct monst * mlit = m_at(x,y);
+        if (*nblind == 1 && levl[x][y].lit && cansee(x,y))
+            *nblind = 2;
+        if (mlit)
+            for(otmp = mlit->minvent; otmp; otmp = otmp->nobj)
+                if (otmp->lamplit)
+                    (void) snuff_lit(otmp);
+    }
+    levl[x][y].lit = 0;
+    snuff_light_source(x, y);
+}
+
+/* Forget known information about this object type. */
+static void
+forget_single_object(int obj_id)
+{
+    objects[obj_id].oc_name_known = 0;
+    objects[obj_id].oc_pre_discovered = 0; /* a discovery when relearned */
+    if (objects[obj_id].oc_uname) {
+        free((genericptr_t) objects[obj_id].oc_uname);
+        objects[obj_id].oc_uname = 0;
+    }
+    undiscover_object(obj_id); /* after clearing oc_name_known */
+
+    /* clear & free object names from matching inventory items too? */
+}
+
+/* randomize the given list of numbers  0 <= i < count */
+static void
+randomize(indices, count)
+int *indices;
+int count;
+{
+    int i, iswap, temp;
+
+    for (i = count - 1; i > 0; i--) {
+        if ((iswap = rn2(i + 1)) == i)
+            continue;
+        temp = indices[i];
+        indices[i] = indices[iswap];
+        indices[iswap] = temp;
+    }
+}
+
+/* Forget % of known objects. */
+void
+forget_objects(int percent)
+{
+    int i, count;
+    int indices[NUM_OBJECTS];
+
+    if (!percent)
+        return;
+    if (percent <= 0 || percent > 100) {
+        impossible("forget_objects: bad percent %d", percent);
+        return;
+    }
+
+    indices[0] = 0; /* lint suppression */
+    for (count = 0, i = 1; i < NUM_OBJECTS; i++)
+        if (OBJ_DESCR(objects[i])
+            && (objects[i].oc_name_known || objects[i].oc_uname))
+            indices[count++] = i;
+
+    if (count > 0) {
+        randomize(indices, count);
+
+        /* forget first % of randomized indices */
+        count = ((count * percent) + rn2(100)) / 100;
+        for (i = 0; i < count; i++)
+            forget_single_object(indices[i]);
+    }
+}
+
+/* Forget some or all of map (depends on parameters). */
+void
+forget_map(int howmuch)
+{
+    register int zx, zy;
+
+    if (Sokoban)
+        return;
+
+    g.known = TRUE;
+    for (zx = 0; zx < COLNO; zx++)
+        for (zy = 0; zy < ROWNO; zy++)
+            if (howmuch & ALL_MAP || rn2(7)) {
+                /* Zonk all memory of this location. */
+                levl[zx][zy].seenv = 0;
+                levl[zx][zy].waslit = 0;
+                levl[zx][zy].glyph = GLYPH_UNEXPLORED;
+                g.lastseentyp[zx][zy] = STONE;
+            }
+    /* forget overview data for this level */
+    forget_mapseen(ledger_no(&u.uz));
+}
+
+/* Forget all traps on the level. */
+void
+forget_traps()
+{
+    register struct trap *trap;
+
+    /* forget all traps (except the one the hero is in :-) */
+    for (trap = g.ftrap; trap; trap = trap->ntrap)
+        if ((trap->tx != u.ux || trap->ty != u.uy) && (trap->ttyp != HOLE))
+            trap->tseen = 0;
+}
+
+/*
+ * Forget given % of all levels that the hero has visited and not forgotten,
+ * except this one.
+ */
+void
+forget_levels(int percent)
+{
+    int i, count;
+    xchar maxl, this_lev;
+    int indices[MAXLINFO];
+
+    if (!percent)
+        return;
+
+    if (percent <= 0 || percent > 100) {
+        impossible("forget_levels: bad percent %d", percent);
+        return;
+    }
+
+    this_lev = ledger_no(&u.uz);
+    maxl = maxledgerno();
+
+    /* count & save indices of non-forgotten visited levels */
+    /* Sokoban levels are pre-mapped for the player, and should stay
+     * so, or they become nearly impossible to solve.  But try to
+     * shift the forgetting elsewhere by fiddling with percent
+     * instead of forgetting fewer levels.
+     */
+    indices[0] = 0; /* lint suppression */
+    for (count = 0, i = 0; i <= maxl; i++)
+        if ((g.level_info[i].flags & VISITED)
+            && !(g.level_info[i].flags & FORGOTTEN) && i != this_lev) {
+            if (ledger_to_dnum(i) == sokoban_dnum)
+                percent += 2;
+            else
+                indices[count++] = i;
+        }
+
+    if (percent > 100)
+        percent = 100;
+
+    if (count > 0) {
+        randomize(indices, count);
+
+        /* forget first % of randomized indices */
+        count = ((count * percent) + 50) / 100;
+        for (i = 0; i < count; i++) {
+            g.level_info[indices[i]].flags |= FORGOTTEN;
+            forget_mapseen(indices[i]);
+        }
+    }
+}
+
 /*
  * Forget some things (e.g. after reading a scroll of amnesia).  When called,
  * the following are always forgotten:
@@ -891,7 +1088,7 @@ recharge(struct obj* obj, int curse_bless)
  * Other things are subject to flags:
  *      howmuch & ALL_SPELLS    = forget all spells
  */
-static void
+void
 forget(int howmuch)
 {
     if (Punished)
@@ -1379,6 +1576,76 @@ seffects(struct obj *sobj) /* sobj - scroll or fake spellbook for spell */
          * monsters are not visible
          */
         break;
+    case SCR_ELEMENTALISM: {
+ 	    struct permonst *critter = (struct permonst *) 0;
+        struct monst *mtmp;
+        int i = 0;
+ 	    int n = 1;
+ 	    int state = MAKE_EM_HOSTILE;
+        /* find the number of critters */
+ 	    if (sobj->blessed) {
+            if (confused) {
+                n = 3 + rn2(10);
+                state = MAKE_EM_TAME;
+            } else if (!rn2(3)) {   
+                state = MAKE_EM_HOSTILE;   /* 1 in 3 */
+            } else {
+                state = MAKE_EM_TAME;
+            }
+ 	    } else if (sobj->cursed) {
+            if (!confused) {
+                n = 2 + rn2(3);
+            }
+ 	    } else {
+            if (confused) {
+                n = 3 + rn2(10);
+            } else if (!rn2(2)) { 
+                state = MAKE_EM_PEACEFUL;
+            }
+ 	    }
+        /* create the critter */
+ 	    if (confused) {
+            /* Normally you get an elemental... */
+            switch (rn2(4)) {
+                case 0:		/* Air */
+                    critter = &mons[PM_GAS_SPORE];
+                    break;
+                case 1:		/* Fire */
+                    critter = &mons[PM_FLAMING_SPHERE];
+                    break;
+                case 2:		/* Water */
+                    critter = &mons[PM_FREEZING_SPHERE];
+                    break;
+                default:
+                case 3:		/* Earth */
+                    critter = &mons[PM_SHOCKING_SPHERE];
+                    break;
+            }
+ 	    } else {
+             critter = &mons[rand_elemental()];
+        }		 
+ 	    /* Summoning demons is a chaotic thing... */
+        for (i = 0; i < n; i++) {
+            mtmp = makemon(critter, u.ux, u.uy, state == MAKE_EM_TAME 
+                ? MM_EDOG | MM_IGNOREWATER | NO_MINVENT : MM_IGNOREWATER | NO_MINVENT);
+            if (!mtmp) {
+                break;
+            } else if (state == MAKE_EM_TAME) {
+                initedog(mtmp);
+            } else if (state == MAKE_EM_PEACEFUL) {
+                mtmp->mpeaceful = 1;
+            } else if (state == MAKE_EM_HOSTILE) {
+                mtmp->mpeaceful = 0;
+            }
+        }
+        g.known = TRUE;
+ 	    if (Hallucination) {
+ 		    You_feel("you have experienced something fundamental.");
+ 	    } else {
+ 	        pline("The elements swirl around you.");
+ 	    }
+ 	    break;
+    }
     case SCR_ENCHANT_WEAPON:
         /* [What about twoweapon mode?  Proofing/repairing/enchanting both
            would be too powerful, but shouldn't we choose randomly between
@@ -1509,6 +1776,22 @@ seffects(struct obj *sobj) /* sobj - scroll or fake spellbook for spell */
             }
         }
         break;
+    case SCR_TIME:
+        g.known = TRUE;
+        if (confused || scursed) {
+            You("are frozen in time!");
+            nomul(-(rn1(5, 10 - 5 * bcsign(sobj))));
+            g.multi_reason = "frozen in time";
+            g.nomovemsg = "Your natural flow of time reasserts itself.";
+        } else {
+            if (Hallucination)
+                pline("ZA WARUDO!");
+            else
+                pline("Time slows down to a crawl around you!");
+            g.youmonst.movement = 50 + bcsign(sobj) * 25;
+            morehungry(rn1(30, 30));
+        }
+        break;
     case SCR_TELEPORTATION:
         if (confused || scursed) {
             level_tele();
@@ -1530,6 +1813,20 @@ seffects(struct obj *sobj) /* sobj - scroll or fake spellbook for spell */
     case SPE_DETECT_FOOD:
         if (food_detect(sobj))
             sobj = 0; /* nothing detected: strange_feeling -> useup */
+        break;
+    case SCR_KNOWLEDGE:
+        useup(sobj);
+        sobj = 0;
+        if (confused)
+            You("know this to be a knowledge scroll.");
+        else {
+            specified_id();
+            if (sblessed)
+                specified_id();
+        }
+        You("feel more knowledgeable.");
+        if (!already_known)
+            (void) learnscrolltyp(SCR_KNOWLEDGE);
         break;
     case SCR_IDENTIFY:
         /* known = TRUE; -- handled inline here */
@@ -1594,6 +1891,35 @@ seffects(struct obj *sobj) /* sobj - scroll or fake spellbook for spell */
         }
         break;
     }
+    case SCR_CHANGE_MATERIAL:
+        if (uwep && rn2(2))
+            otmp = uwep;
+        else
+            otmp = some_armor(&g.youmonst);
+        if (!otmp) {
+            strange_feeling(sobj, "Your skin crawls for a moment.");
+            sobj = 0; /* useup() in strange_feeling() */
+            exercise(A_CON, !scursed);
+            exercise(A_STR, !scursed);
+            break;
+        }
+        if (confused || scursed) {
+            pline("%s with a sickly green light!", Yobjnam2(otmp, "glow"));
+            curse(otmp);
+            otmp->oerodeproof = 0;
+            if (valid_obj_material(otmp, PLASTIC)) {
+                otmp->material = PLASTIC;
+                costly_alteration(otmp, COST_DRAIN);
+            } else
+                warp_material(otmp, TRUE);
+            break;
+        } else {
+            if (sblessed)
+                bless(otmp);
+            pline("%s with a strange yellow light!", Yobjnam2(otmp, "glow"));
+            warp_material(otmp, TRUE);
+        }
+        break;
     case SCR_CHARGING:
         if (confused) {
             if (scursed) {
@@ -1788,6 +2114,66 @@ seffects(struct obj *sobj) /* sobj - scroll or fake spellbook for spell */
         }
         punish(sobj);
         break;
+    case SCR_CLONING: {
+        register struct monst *mtmp;
+        register struct obj *otmp2;
+        int otyp;
+        g.known = TRUE;
+        if (confused) {
+            if (!Hallucination) {
+                You("clone yourself!");
+            } else {
+                You("realize that you have been a clone all along!");
+            }
+            mtmp = cloneu();
+            mtmp->mpeaceful = 0;
+        } else {
+            if (!already_known)
+                You("have found a scroll of cloning!");
+            otmp = getobj("clone", any_obj_ok, GETOBJ_NOFLAGS);
+            /* Unique items */
+            if (otmp->otyp == BELL_OF_OPENING) {
+                otyp = BELL;
+                break;
+            } else if (otmp->otyp == CANDELABRUM_OF_INVOCATION) {
+                otyp = WAX_CANDLE;
+                break;
+            } else if (otmp->otyp == AMULET_OF_YENDOR) {
+                otyp = FAKE_AMULET_OF_YENDOR;
+                break;
+            } else if (otmp->otyp == SPE_BOOK_OF_THE_DEAD) {
+                otyp = SPE_BLANK_PAPER;
+                break;
+            } else {
+                otyp = otmp->otyp;
+            }
+            otmp2 = mksobj_at(otyp, u.ux, u.uy, FALSE, FALSE);
+            if (otmp2 == &cg.zeroobj) impossible("Invalid cloned object?");
+            /* beatitude */
+            if (scursed) curse(otmp2);
+            else otmp2->blessed = otmp->blessed;
+            /* charge / enchantment */
+            if (sblessed) otmp2->spe = otmp->spe;
+            else otmp2->spe = min(otmp->spe, 0);
+            /* other properties */
+            otmp2->material = otmp->material;
+            otmp2->greased = otmp->greased;
+            otmp2->oeroded = otmp->oeroded;
+            otmp2->oeroded2 = otmp->oeroded2;
+            otmp2->opoisoned = otmp->opoisoned;
+            otmp2->corpsenm = otmp->corpsenm;
+            /* Prevent exploits */
+            if (otmp2->otyp == WAN_WISHING) otmp2->spe = -1;
+            else if (otmp2->otyp == MAGIC_MARKER && otmp2->spe >= 16)
+                otmp2->spe = 15;
+            otmp2->quan = 1;
+            obj_extract_self(otmp2);
+            (void) hold_another_object(otmp2, "Whoops! %s out of your grasp.",
+                                   The(aobjnam(otmp2, "tumbles")),
+                                   (const char *) 0);
+        }
+        break;
+    }
     case SCR_STINKING_CLOUD: {
         coord cc;
 
@@ -1819,6 +2205,49 @@ seffects(struct obj *sobj) /* sobj - scroll or fake spellbook for spell */
     if (!sobj)
         update_inventory();
     return sobj ? 0 : 1;
+}
+
+static void
+specified_id()
+{
+    static char buf[BUFSZ] = DUMMY;
+    char promptbuf[BUFSZ];
+    char bufcpy[BUFSZ];
+    short otyp;
+    int tries = 0;
+
+    promptbuf[0] = '\0';
+    if (flags.verbose)
+        You("may learn about any non-artifact.");
+  retry:
+    Strcpy(promptbuf, "What non-artifact do you want to learn about");
+    Strcat(promptbuf, "?");
+    getlin(promptbuf, buf);
+    (void) mungspaces(buf);
+    if (buf[0] == '\033') {
+        buf[0] = '\0';
+    }
+    strcpy(bufcpy, buf);
+    otyp = name_to_otyp(buf);
+    if (otyp == STRANGE_OBJECT) {
+        pline("No specific object of that name exists.");
+        if (++tries < 5)
+            goto retry;
+        pline1(thats_enough_tries);
+        if (!otyp)
+            return; /* for safety; should never happen */
+    }
+    if (objects[otyp].oc_name_known) {
+        pline("You already know what that object looks like.");
+        if (++tries < 5)
+            goto retry;
+        pline1(thats_enough_tries);
+        if (!otyp)
+            return;
+    }
+    (void) makeknown(otyp);
+    You("now know more about %s.", makeplural(simple_typename(otyp)));
+    update_inventory();
 }
 
 void
@@ -1962,8 +2391,12 @@ wand_explode(struct obj* obj, int chg /* recharging */)
         break;
     case WAN_COLD:
     case WAN_FIRE:
+    case WAN_ACID:
     case WAN_LIGHTNING:
     case WAN_MAGIC_MISSILE:
+    case WAN_POISON_GAS:
+    case WAN_SONICS:
+    case WAN_PSIONICS:
         k = 8;
         break;
     case WAN_NOTHING:
@@ -2115,6 +2548,50 @@ litroom(register boolean on, struct obj* obj)
             free((genericptr_t) gremlin);
         } while (gremlins);
     }
+}
+
+/* can be used even if no mon is at xx, yy */
+void
+litroom_mon(boolean on, struct obj *obj, int xx, int yy)
+{
+    struct monst * mlit = m_at(xx,yy);
+    char u_see_effects = !Blind;
+
+    /*
+     *  If we are darkening the room and the hero is punished but not
+     *  blind, then we have to pick up and replace the ball and chain so
+     *  that we don't remember them if they are out of sight.
+     */
+    if (Punished && !on && !Blind)
+        move_bc(1, 0, uball->ox, uball->oy, uchain->ox, uchain->oy);
+
+
+    do_clear_area(xx,yy,
+        (obj && obj->oclass==SCROLL_CLASS && obj->blessed) ? 5 : 3,
+        (on)?set_lit:set_dark, (genericptr_t)&u_see_effects );
+
+    /*
+     *  If we are not blind, then force a redraw on all positions in sight
+     *  by temporarily blinding the hero.  The vision recalculation will
+     *  correctly update all previously seen positions *and* correctly
+     *  set the waslit bit [could be messed up from above].
+     */
+    if (!Blind) {
+        vision_recalc(2);
+
+      /* replace ball&chain */
+      if (Punished && !on)
+          move_bc(0, 0, uball->ox, uball->oy, uchain->ox, uchain->oy);
+    }
+    if (on && canseemon(mlit)){
+        pline("A lit field surrounds %s!", mon_nam(mlit));
+    }
+    if (!on && u_see_effects==2){
+        pline("A shroud of darkness settles %s!",
+            (distu(xx,yy) > 15)?"in the distance":"nearby");
+    }
+
+    g.vision_full_recalc = 1;	/* delayed vision recalculation */
 }
 
 static void
@@ -2548,7 +3025,7 @@ create_particular_parse(char* str, struct _create_particular_data* d)
     d->genderconf = -1;  /* no confusion on which gender to assign */
     d->randmonst = FALSE;
     d->maketame = d->makepeaceful = d->makehostile = FALSE;
-    d->sleeping = d->saddled = d->invisible = d->hidden = FALSE;
+    d->sleeping = d->saddled = d->invisible = d->hidden = d->templated = FALSE;
 
     /* quantity */
     if (digit(*bufp)) {
@@ -2602,6 +3079,11 @@ create_particular_parse(char* str, struct _create_particular_data* d)
     } else if (!strncmpi(bufp, "hostile ", 8)) {
         bufp += 8;
         d->makehostile = TRUE;
+    }
+    /* TODO: Parse specific templates */
+    if (!strncmpi(bufp, "templated ", 10)) {
+        bufp += 10;
+        d->templated = TRUE;
     }
     /* decide whether a valid monster was chosen */
     if (wizard && (!strcmp(bufp, "*") || !strcmp(bufp, "random"))) {
@@ -2720,6 +3202,10 @@ create_particular_creation(struct _create_particular_data* d)
             mtmp->mtame = 0; /* sanity precaution */
             mtmp->mpeaceful = d->makepeaceful ? 1 : 0;
             set_malign(mtmp);
+        }
+        if (d->templated) {
+            newetemplate(mtmp);
+            initetemplate(mtmp, rn2(NUMTEMPLATES));
         }
         if (d->saddled && can_saddle(mtmp) && !which_armor(mtmp, W_SADDLE)) {
             struct obj *otmp = mksobj(SADDLE, TRUE, FALSE);

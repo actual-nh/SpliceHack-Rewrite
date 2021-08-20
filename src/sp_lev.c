@@ -769,7 +769,8 @@ flip_level(int flp, boolean extras)
 
     /* timed effects */
     for (timer = g.timer_base; timer; timer = timer->next) {
-        if (timer->func_index == MELT_ICE_AWAY) {
+        if (timer->func_index == MELT_ICE_AWAY || timer->func_index == FIXTURE_ACTIVATE
+            || timer->func_index == COLLAPSE_ROPE_BRIDGE) {
             long ty = timer->arg.a_long & 0xffff;
             long tx = (timer->arg.a_long >> 16) & 0xffff;
 
@@ -863,14 +864,14 @@ set_wall_property(xchar x1, xchar y1, xchar x2, xchar y2, int prop)
 }
 
 /*
- * Count the different features (sinks, fountains) in the level.
+ * Count the different features (sinks, fountains, furnaces) in the level.
  */
 static void
 count_features(void)
 {
     xchar x, y;
 
-    g.level.flags.nfountains = g.level.flags.nsinks = 0;
+    g.level.flags.nfountains = g.level.flags.nsinks = g.level.flags.nvents = g.level.flags.nfurnaces = 0;
     for (y = 0; y < ROWNO; y++)
         for (x = 0; x < COLNO; x++) {
             int typ = levl[x][y].typ;
@@ -878,6 +879,10 @@ count_features(void)
                 g.level.flags.nfountains++;
             else if (typ == SINK)
                 g.level.flags.nsinks++;
+            else if (typ == VENT)
+                g.level.flags.nvents++;
+            else if (typ == FURNACE)
+                g.level.flags.nfurnaces++;
         }
 }
 
@@ -1121,7 +1126,7 @@ is_ok_location(xchar x, xchar y, int humidity)
     if (humidity & DRY) {
         typ = levl[x][y].typ;
         if (typ == ROOM || typ == AIR || typ == CLOUD || typ == ICE
-            || typ == CORR)
+            || typ == CORR || typ == BRIDGE)
             return TRUE;
     }
     if ((humidity & SPACELOC) && SPACE_POS(levl[x][y].typ))
@@ -2592,6 +2597,8 @@ fill_special_room(struct mkroom* croom)
         case LEPREHALL:
         case MORGUE:
         case BARRACKS:
+        case DEN:
+        case LEMUREPIT:
             fill_zoo(croom);
             break;
         }
@@ -2621,6 +2628,15 @@ fill_special_room(struct mkroom* croom)
     case SWAMP:
         g.level.flags.has_swamp = TRUE;
         break;
+    case ARMORY:
+        g.level.flags.has_armory = TRUE;
+        break;
+    case DEN:
+        g.level.flags.has_den = TRUE;
+        break;
+    case LEMUREPIT:
+ 		g.level.flags.has_lemurepit = TRUE;
+ 		break;
     }
 }
 
@@ -3609,6 +3625,8 @@ static const struct {
     { "swamp", SWAMP },
     { "vault", VAULT },
     { "beehive", BEEHIVE },
+    { "lemurepit", LEMUREPIT },
+    { "den", DEN },
     { "morgue", MORGUE },
     { "barracks", BARRACKS },
     { "zoo", ZOO },
@@ -3617,6 +3635,7 @@ static const struct {
     { "anthole", ANTHOLE },
     { "blackfoyer", BLACKFOYER },
     { "cocknest", COCKNEST },
+    { "dilapidated armory", ARMORY },
     { "leprehall", LEPREHALL },
     { "shop", SHOPBASE },
     { "armor shop", ARMORSHOP },
@@ -3628,6 +3647,9 @@ static const struct {
     { "wand shop", WANDSHOP },
     { "tool shop", TOOLSHOP },
     { "book shop", BOOKSHOP },
+    { "archery shop", ARCHERYSHOP },
+    { "mask shop", MASKSHOP },
+    { "junk shop", JUNKSHOP },
     { "health food shop", FODDERSHOP },
     { "candle shop", CANDLESHOP },
     { "black market", BLACKSHOP },
@@ -4864,9 +4886,9 @@ l_table_getset_feature_flag(
 int
 lspo_feature(lua_State* L)
 {
-    static const char *const features[] = { "fountain", "sink", "pool",
+    static const char *const features[] = { "fountain", "furnace", "sink", "pool",
                                             "throne", "tree", NULL };
-    static const int features2i[] = { FOUNTAIN, SINK, POOL,
+    static const int features2i[] = { FOUNTAIN, FURNACE, SINK, POOL,
                                       THRONE, TREE, STONE };
     xchar x,y;
     int typ;
@@ -4912,6 +4934,9 @@ lspo_feature(lua_State* L)
     case FOUNTAIN:
         l_table_getset_feature_flag(L, x, y, "looted", F_LOOTED);
         l_table_getset_feature_flag(L, x, y, "warned", F_WARNED);
+        break;
+    case FURNACE:
+        typ = FURNACE;
         break;
     case SINK:
         l_table_getset_feature_flag(L, x, y, "pudding", S_LPUDDING);

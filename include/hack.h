@@ -115,6 +115,7 @@ enum cost_alteration_types {
 #define CXN_PFX_THE 4   /* prefix with "the " (unless pname) */
 #define CXN_ARTICLE 8   /* include a/an/the prefix */
 #define CXN_NOCORPSE 16 /* suppress " corpse" suffix */
+#define CXN_FORCEMAT 32 /* force the material name */
 
 /* flags for look_here() */
 #define LOOKHERE_PICKED_SOME   1
@@ -135,21 +136,22 @@ enum getpos_retval {
  */
 enum game_end_types {
     DIED         =  0,
-    CHOKING      =  1,
-    POISONING    =  2,
-    STARVING     =  3,
-    DROWNING     =  4,
-    BURNING      =  5,
-    DISSOLVED    =  6,
-    CRUSHING     =  7,
-    STONING      =  8,
-    TURNED_SLIME =  9,
-    GENOCIDED    = 10,
-    PANICKED     = 11,
-    TRICKED      = 12,
-    QUIT         = 13,
-    ESCAPED      = 14,
-    ASCENDED     = 15
+    MURDERED     =  1,
+    CHOKING      =  2,
+    POISONING    =  3,
+    STARVING     =  4,
+    DROWNING     =  5,
+    BURNING      =  6,
+    DISSOLVED    =  7,
+    CRUSHING     =  8,
+    STONING      =  9,
+    TURNED_SLIME = 10,
+    GENOCIDED    = 11,
+    PANICKED     = 12,
+    TRICKED      = 13,
+    QUIT         = 14,
+    ESCAPED      = 15,
+    ASCENDED     = 16
 };
 
 typedef struct strbuf {
@@ -246,8 +248,8 @@ typedef struct sortloot_item Loot;
 
 #define MATCH_WARN_OF_MON(mon) \
     (Warn_of_mon                                                        \
-     && ((g.context.warntype.obj & (mon)->data->mflags2) != 0           \
-         || (g.context.warntype.polyd & (mon)->data->mflags2) != 0      \
+     && ((g.context.warntype.obj & (mon)->data->mhflags) != 0           \
+         || (g.context.warntype.polyd & (mon)->data->mhflags) != 0      \
          || (g.context.warntype.species                                 \
              && (g.context.warntype.species == (mon)->data))))
 
@@ -286,6 +288,7 @@ typedef struct sortloot_item Loot;
 #define GP_ALLOW_U  0x080000L /* don't reject hero's location */
 #define MM_ERID     0x100000L /* add erid structure */
 #define MM_NOERID   0x200000L /* disallow steed */
+#define MM_NOTEMPLATE 0x40000000L /* no template chance */
 
 /* flags for make_corpse() and mkcorpstat() */
 #define CORPSTAT_NONE 0x00
@@ -473,7 +476,8 @@ enum bodypart_types {
 #define WAND_BACKFIRE_CHANCE 100
 #define BALL_IN_MON (u.uswallow && uball && uball->where == OBJ_FREE)
 #define CHAIN_IN_MON (u.uswallow && uchain && uchain->where == OBJ_FREE)
-#define NODIAG(monnum) ((monnum) == PM_GRID_BUG)
+#define NODIAG(monnum) ((monnum) == PM_GRID_BUG || (monnum) == PM_SPARK_BUG \
+                        || (monnum) == PM_ARC_BUG || (monnum) == PM_LIGHTNING_BUG)
 
 /* Flags to control menus */
 #define MENUTYPELEN sizeof("traditional ")
@@ -570,8 +574,9 @@ enum optset_restrictions {
 #define plur(x) (((x) == 1) ? "" : "s")
 
 #define ARM_BONUS(obj)                      \
-    (objects[(obj)->otyp].a_ac + (obj)->spe \
-     - min((int) greatest_erosion(obj), objects[(obj)->otyp].a_ac))
+    (objects[(obj)->otyp].a_ac + (obj)->spe + material_bonus(obj) \
+     - min((int) greatest_erosion(obj), \
+          objects[(obj)->otyp].a_ac + material_bonus(obj)))
 
 #define W_ARM_BONUS(obj) \
     ((is_weptool((obj)) || (obj)->oclass == WEAPON_CLASS) ? \
@@ -602,6 +607,6 @@ enum optset_restrictions {
 #endif
 
 #define DEVTEAM_EMAIL "AntiGulp"
-#define DEVTEAM_URL "https://www.github.com/NullCGT/SpliceHack"
+#define DEVTEAM_URL "https://www.github.com/NullCGT/SpliceHack-Rewrite"
 
 #endif /* HACK_H */

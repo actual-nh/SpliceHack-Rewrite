@@ -53,18 +53,23 @@ struct permonst {
         cnutrit;                /* its nutritional value */
     uchar msound;               /* noise it makes (6 bits) */
     uchar msize;                /* physical size (3 bits) */
-    uchar mresists;             /* resistances */
+    unsigned long mresists;     /* resistances */
     uchar mconveys;             /* conveyed by eating */
     unsigned long mflags1,      /* boolean bitflags */
         mflags2;                /* more boolean bitflags */
     unsigned short mflags3;     /* yet more boolean bitflags */
+    unsigned long mhflags;      /* species boolean bitflags */
     uchar difficulty;		/* toughness (formerly from  makedefs -m) */
 #ifdef TEXTCOLOR
     uchar mcolor; /* color to use */
 #endif
+    short orig_mnum;            /* templated monsters - This corresponds with
+                                   the pm of the base monster, so that we can
+                                   find it with monsndx. */
 };
 
 extern NEARDATA struct permonst mons[]; /* the master list of monster types */
+extern NEARDATA struct permonst montemplates[]; /* the master list of monster templates */
 
 #define VERY_SLOW 3
 #define SLOW_SPEED 9

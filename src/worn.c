@@ -218,7 +218,8 @@ wearslot(struct obj *obj)
             res |= W_QUIVER;
         break;
     case TOOL_CLASS:
-        if (otyp == BLINDFOLD || otyp == TOWEL || otyp == LENSES)
+        if (otyp == BLINDFOLD || otyp == TOWEL || otyp == LENSES
+            || otyp == MASK)
             res = W_TOOL; /* WORN_BLINDF */
         else if (is_weptool(obj) || otyp == TIN_OPENER)
             res = W_WEP | W_SWAPWEP;
@@ -228,6 +229,8 @@ wearslot(struct obj *obj)
     case FOOD_CLASS:
         if (obj->otyp == MEAT_RING)
             res = W_RINGL | W_RINGR;
+        else if (obj->otyp == PUMPKIN)
+            res = W_ARMH;
         break;
     case GEM_CLASS:
         res = W_QUIVER;
@@ -345,6 +348,16 @@ update_mon_intrinsics(struct monst *mon, struct obj *obj, boolean on,
     int which = (int) objects[obj->otyp].oc_oprop;
 
     unseen = !canseemon(mon);
+
+    if (obj->otyp == GOLD_DRAGON_SCALE_MAIL || obj->otyp == GOLD_DRAGON_SCALES) {
+		if(on)
+			begin_burn(obj,FALSE);
+		else
+			end_burn(obj,FALSE);
+		if(!unseen && !silently)
+			if(on) pline("%s begins to glow.", The(xname(obj)));
+	}
+
     if (!which)
         goto maybe_blocks;
 

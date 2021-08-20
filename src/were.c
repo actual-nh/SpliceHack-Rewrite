@@ -17,21 +17,39 @@ were_change(struct monst *mon)
                             : (flags.moonphase == FULL_MOON ? 10 : 50))) {
             new_were(mon); /* change into animal form */
             if (!Deaf && !canseemon(mon)) {
-                const char *howler;
+                const char *howler, *howl;
 
                 switch (monsndx(mon->data)) {
                 case PM_WEREWOLF:
                     howler = "wolf";
+                    howl = "howling";
+                    break;
+                case PM_WERETIGER:
+                    howler = "tiger";
+                    howl = "yowling";
                     break;
                 case PM_WEREJACKAL:
                     howler = "jackal";
+                    howl = "howling";
+                    break;
+                case PM_WERECOCKATRICE:
+                    howler = "chicken";
+                    howl = "squawking";
+                    break;
+                case PM_PACK_LORD:
+                    howler = "pack of wolves";
+                    howl = "howling";
                     break;
                 default:
                     howler = (char *) 0;
                     break;
                 }
-                if (howler)
-                    You_hear("a %s howling at the moon.", howler);
+                if (howler) {
+                    if (Hallucination)
+                        You_hear("the moon %s like a %s", howl, howler);
+                    else
+                        You_hear("a %s %s at the moon.", howler, howl);
+                }
             }
         }
     } else if (!rn2(30) || Protection_from_shape_changers) {
@@ -45,6 +63,10 @@ int
 counter_were(int pm)
 {
     switch (pm) {
+    case PM_HUMAN_PACK_LORD:
+        return PM_PACK_LORD;
+    case PM_PACK_LORD:
+        return PM_HUMAN_PACK_LORD;
     case PM_WEREWOLF:
         return PM_HUMAN_WEREWOLF;
     case PM_HUMAN_WEREWOLF:
@@ -57,6 +79,14 @@ counter_were(int pm)
         return PM_HUMAN_WERERAT;
     case PM_HUMAN_WERERAT:
         return PM_WERERAT;
+    case PM_WERECOCKATRICE:
+        return PM_HUMAN_WERECOCKATRICE;
+    case PM_HUMAN_WERECOCKATRICE:
+        return PM_WERECOCKATRICE;
+    case PM_WERETIGER:
+        return PM_HUMAN_WERETIGER;
+    case PM_HUMAN_WERETIGER:
+        return PM_WERETIGER;
     default:
         return NON_PM;
     }
@@ -67,6 +97,14 @@ int
 were_beastie(int pm)
 {
     switch (pm) {
+    case PM_WERECOCKATRICE:
+    case PM_COCKATRICE:
+    case PM_CHICKATRICE:
+    case PM_PYROLISK:
+        return PM_WERECOCKATRICE;
+    case PM_TIGER:
+    case PM_WERETIGER:
+        return PM_WERETIGER;
     case PM_WERERAT:
     case PM_SEWER_RAT:
     case PM_GIANT_RAT:
@@ -137,6 +175,7 @@ were_summon(struct permonst *ptr,
         switch (pm) {
         case PM_WERERAT:
         case PM_HUMAN_WERERAT:
+        case PM_NOSFERATU:
             typ = rn2(3) ? PM_SEWER_RAT
                          : rn2(3) ? PM_GIANT_RAT : PM_RABID_RAT;
             if (genbuf)
@@ -148,9 +187,30 @@ were_summon(struct permonst *ptr,
             if (genbuf)
                 Strcpy(genbuf, "jackal");
             break;
+        case PM_WERECOCKATRICE:
+        case PM_HUMAN_WERECOCKATRICE:
+            typ = rn2(3) ? PM_CHICKATRICE : rn2(3) ? PM_PYROLISK : PM_CHICKATRICE;
+            if (genbuf)
+                Strcpy(genbuf, "cockatrice");
+            break;
+        case PM_HUMAN_WERETIGER:
+        case PM_WERETIGER:
+            typ = PM_TIGER;
+            if (genbuf)
+                Strcpy(genbuf, "tiger");
+            break;
         case PM_WEREWOLF:
         case PM_HUMAN_WEREWOLF:
             typ = rn2(5) ? PM_WOLF : rn2(2) ? PM_WARG : PM_WINTER_WOLF;
+            if (genbuf)
+                Strcpy(genbuf, "wolf");
+            break;
+        case PM_HUMAN_PACK_LORD:
+        case PM_PACK_LORD:
+            if (!yours)
+                typ = !rn2(2) ? PM_WOLF : PM_WEREWOLF;
+            else
+                typ = rn2(4) ? PM_WOLF : PM_WINTER_WOLF;
             if (genbuf)
                 Strcpy(genbuf, "wolf");
             break;
@@ -173,7 +233,7 @@ void
 you_were(void)
 {
     char qbuf[QBUFSZ];
-    boolean controllable_poly = Polymorph_control && !(Stunned || Unaware);
+    boolean controllable_poly = Polymorph_control && !(Stunned || Afraid || Unaware);
 
     if (Unchanging || u.umonnum == u.ulycn)
         return;
@@ -190,7 +250,7 @@ you_were(void)
 void
 you_unwere(boolean purify)
 {
-    boolean controllable_poly = Polymorph_control && !(Stunned || Unaware);
+    boolean controllable_poly = Polymorph_control && !(Stunned || Afraid || Unaware);
 
     if (purify) {
         You_feel("purified.");

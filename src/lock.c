@@ -735,7 +735,7 @@ doopen_indir(int x, int y)
 
     /* when choosing a direction is impaired, use a turn
        regardless of whether a door is successfully targetted */
-    if (Confusion || Stunned)
+    if (Confusion || Stunned || Afraid)
         res = 1;
 
     door = &levl[cc.x][cc.y];
@@ -885,7 +885,7 @@ doclose(void)
 
     /* when choosing a direction is impaired, use a turn
        regardless of whether a door is successfully targetted */
-    if (Confusion || Stunned)
+    if (Confusion || Stunned || Afraid)
         res = 1;
 
     door = &levl[x][y];
@@ -1177,7 +1177,7 @@ chest_shatter_msg(struct obj *otmp)
     Blinded = 1;
     thing = singular(otmp, xname);
     Blinded = save_Blinded;
-    switch (objects[otmp->otyp].oc_material) {
+    switch (otmp->material) {
     case PAPER:
         disposition = "is torn to shreds";
         break;
@@ -1195,6 +1195,9 @@ chest_shatter_msg(struct obj *otmp)
         break;
     case WOOD:
         disposition = "splinters to fragments";
+        break;
+    case SLIME:
+        disposition = "splatters";
         break;
     default:
         disposition = "is destroyed";

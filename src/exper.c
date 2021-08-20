@@ -11,15 +11,45 @@
 static int enermod(int);
 
 long
-newuexp(int lev)
+newuexp(lev)
+int lev;
 {
-    if (lev < 1) /* for newuexp(u.ulevel - 1) when u.ulevel is 1 */
-        return 0L;
-    if (lev < 10)
-        return (10L * (1L << lev));
-    if (lev < 20)
-        return (10000L * (1L << (lev - 10)));
-    return (10000000L * ((long) (lev - 19)));
+    /* keep this synced with the status-drawing code in the clients */
+    switch (lev) {
+    case  0: return      0;
+    case  1: return     20; /* n^2 */
+    case  2: return     40;
+    case  3: return     80;
+    case  4: return    160;
+    case  5: return    320;
+    case  6: return    640;
+    case  7: return   1280;
+    case  8: return   2560;
+    case  9: return   5120;
+    case 10: return  10000; /* triangle numbers */
+    case 11: return  15000;
+    case 12: return  21000;
+    case 13: return  28000;
+    case 14: return  36000;
+    case 15: return  45000;
+    case 16: return  55000;
+    case 17: return  66000;
+    case 18: return  81000; /* n*n series */
+    case 19: return 100000;
+    case 20: return 142000;
+    case 21: return 188000;
+    case 22: return 238000;
+    case 23: return 292000;
+    case 24: return 350000;
+    case 25: return 412000;
+    case 26: return 478000;
+    case 27: return 548000;
+    case 28: return 622000;
+    case 29: return 700000;
+    case 30: return 800000; /* 100k per additional !oGL */
+    }
+    impossible("unknown level: %d", lev);
+    return 10000000;
 }
 
 static int
@@ -120,6 +150,10 @@ experience(register struct monst *mtmp, register int nk)
     if (extra_nasty(ptr))
         tmp += (7 * mtmp->m_lev);
 
+    /* Templated monsters grant even more */
+    if (has_etemplate(mtmp) && montemplates[ETEMPLATE(mtmp)->template_index].difficulty)
+        tmp += (7 * mtmp->data->difficulty);
+
     /*  For higher level monsters, an additional bonus is given */
     if (mtmp->m_lev > 8)
         tmp += 50;
@@ -202,7 +236,7 @@ losexp(const char *drainer) /* cause of death, if drain should be fatal */
        wizard mode request to reduce level; never fatal though */
     if (drainer && !strcmp(drainer, "#levelchange"))
         drainer = 0;
-    else if (resists_drli(&g.youmonst))
+    else if (resists_drli(&g.youmonst) || item_catches_drain(&g.youmonst))
         return;
 
     /* level-loss message; "Goodbye level 1." is fatal; divine anger
@@ -280,16 +314,18 @@ pluslvl(boolean incr) /* true iff via incremental experience growth */
     if (!incr)
         You_feel("more experienced.");
 
-    /* increase hit points (when polymorphed, do monster form first
-       in order to retain normal human/whatever increase for later) */
-    if (Upolyd) {
-        hpinc = monhp_per_lvl(&g.youmonst);
-        u.mhmax += hpinc;
-        u.mh += hpinc;
+    if (!u.uroleplay.marathon && !u.uroleplay.heaven_or_hell) {
+        /* increase hit points (when polymorphed, do monster form first
+           in order to retain normal human/whatever increase for later) */
+        if (Upolyd) {
+            hpinc = monhp_per_lvl(&g.youmonst);
+            u.mhmax += hpinc;
+            u.mh += hpinc;
+        }
+        hpinc = newhp();
+        u.uhpmax += hpinc;
+        u.uhp += hpinc;
     }
-    hpinc = newhp();
-    u.uhpmax += hpinc;
-    u.uhp += hpinc;
 
     /* increase spell power/energy points */
     eninc = newpw();

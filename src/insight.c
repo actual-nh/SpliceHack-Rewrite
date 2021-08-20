@@ -825,6 +825,19 @@ status_enlightenment(int mode, int final)
     enlght_out_attr(ATR_SUBHEAD, final ? "Final Status:" : "Current Status:");
 
     Strcpy(youtoo, You_);
+    /* In heaven or hell mode, this is arguably the most important
+       attribute. */
+    /* heaven or hell modes */
+	if (u.uroleplay.heaven_or_hell) {
+		if (u.ulives > 1)
+			Sprintf(buf, "%d lives remaining", u.ulives);
+		else if (u.ulives == 0)
+			Sprintf(buf, "no lives remaining");
+		else
+			Sprintf(buf, "%d life remaining", u.ulives);
+		you_have(buf, "");
+	}
+
     /* not a traditional status but inherently obvious to player; more
        detail given below (attributes section) for magic enlightenment */
     if (Upolyd) {
@@ -915,10 +928,22 @@ status_enlightenment(int mode, int final)
         you_are("nauseated", "");
     if (Stunned)
         you_are("stunned", "");
+    if (Afraid) {
+        if (u.fearedmon) {
+            Sprintf(buf, "terrified by %s",
+                canseemon(u.fearedmon) ? a_monnam(u.fearedmon) : "an unseen monster");
+            you_are(buf, "");
+        } else {
+            you_are("frightened", "");
+        }
+    }
     if (Confusion)
         you_are("confused", "");
-    if (Hallucination)
-        you_are("hallucinating", "");
+    if (Hallucination) {
+        Sprintf(buf, "%s hallucinating",
+                u.uroleplay.hallu ? "permanently" : DeathVision ? "deliberately" : "temporarily");
+        you_are(buf, "");
+    }
     if (DeathVision)
         you_are("dealing double damage due to comprehending death", "");
     if (Blind) {
@@ -1177,7 +1202,7 @@ weapon_insight(int final)
         if (sklvl == P_ISRESTRICTED)
             Strcpy(sklvlbuf, "no");
         else
-            (void) lcase(skill_level_name(wtype, sklvlbuf));
+            (void) lcase(skill_level_name(wtype, sklvlbuf, FALSE));
         /* "you have no/basic/expert/master/grand-master skill with <skill>"
            or "you are unskilled/skilled in <skill>" */
         Sprintf(buf, "%s %s %s", sklvlbuf,
@@ -1215,7 +1240,7 @@ weapon_insight(int final)
                    skill_level_name() returns "Unknown" for it */
                 Strcpy(twobuf, "restricted");
             } else {
-                (void) lcase(skill_level_name(P_TWO_WEAPON_COMBAT, twobuf));
+                (void) lcase(skill_level_name(P_TWO_WEAPON_COMBAT, twobuf, FALSE));
             }
 
             /* keep buf[] from above in case skill levels match */
@@ -1250,7 +1275,7 @@ weapon_insight(int final)
                identical to the comparison between primary and twoweap */
             if (wtype2 != wtype) {
                 Strcpy(sknambuf2, skill_name(wtype2));
-                (void) lcase(skill_level_name(wtype2, sklvlbuf2));
+                (void) lcase(skill_level_name(wtype2, sklvlbuf2, FALSE));
                 verb_present = "is", verb_past = "was";
                 pfx[0] = sfx[0] = buf[0] = '\0';
                 if (twoskl < sklvl2) {
@@ -1378,6 +1403,10 @@ attributes_enlightenment(int unused_mode UNUSED, int final)
         you_are("poison resistant", from_what(POISON_RES));
     if (Acid_resistance)
         you_are("acid resistant", from_what(ACID_RES));
+    if (Psychic_resistance)
+        you_are("psychic resistant", from_what(PSYCHIC_RES));
+    if (Sonic_resistance)
+        you_are("sonic resistant", from_what(SONIC_RES));
     if (Drain_resistance)
         you_are("level-drain resistant", from_what(DRAIN_RES));
     if (Sick_resistance)
@@ -1406,23 +1435,23 @@ attributes_enlightenment(int unused_mode UNUSED, int final)
         you_are("warned", from_what(WARNING));
     if (Warn_of_mon && g.context.warntype.obj) {
         Sprintf(buf, "aware of the presence of %s",
-                (g.context.warntype.obj & M2_ORC) ? "orcs"
-                : (g.context.warntype.obj & M2_ELF) ? "elves"
-                : (g.context.warntype.obj & M2_DEMON) ? "demons" : something);
+                (g.context.warntype.obj & MH_ORC) ? "orcs"
+                : (g.context.warntype.obj & MH_ELF) ? "elves"
+                : (g.context.warntype.obj & MH_DEMON) ? "demons" : something);
         you_are(buf, from_what(WARN_OF_MON));
     }
     if (Warn_of_mon && g.context.warntype.polyd) {
         Sprintf(buf, "aware of the presence of %s",
-                ((g.context.warntype.polyd & (M2_HUMAN | M2_ELF))
-                 == (M2_HUMAN | M2_ELF))
+                ((g.context.warntype.polyd & (MH_HUMAN | MH_ELF))
+                 == (MH_HUMAN | MH_ELF))
                     ? "humans and elves"
-                    : (g.context.warntype.polyd & M2_HUMAN)
+                    : (g.context.warntype.polyd & MH_HUMAN)
                           ? "humans"
-                          : (g.context.warntype.polyd & M2_ELF)
+                          : (g.context.warntype.polyd & MH_ELF)
                                 ? "elves"
-                                : (g.context.warntype.polyd & M2_ORC)
+                                : (g.context.warntype.polyd & MH_ORC)
                                       ? "orcs"
-                                      : (g.context.warntype.polyd & M2_DEMON)
+                                      : (g.context.warntype.polyd & MH_DEMON)
                                             ? "demons"
                                             : "certain monsters");
         you_are(buf, "");
@@ -1663,8 +1692,12 @@ attributes_enlightenment(int unused_mode UNUSED, int final)
     }
     if (Unchanging && Upolyd) /* !Upolyd handled above */
         you_can("not change from your current form", from_what(UNCHANGING));
-    if (Hate_silver)
-        you_are("harmed by silver", "");
+    for (ltmp = 1; ltmp < NUM_MATERIAL_TYPES; ++ltmp) {
+        if (Hate_material(ltmp)) {
+            Sprintf(buf, "harmed by %s", materialnm[ltmp]);
+            you_are(buf, "");
+        }
+    }
     /* movement and non-armor-based protection */
     if (Fast)
         you_are(Very_fast ? "very fast" : "fast", from_what(FAST));
@@ -1878,10 +1911,20 @@ show_conduct(int final)
     g.en_win = create_nhwindow(NHW_MENU);
     putstr(g.en_win, ATR_HEADING, "Voluntary challenges:");
 
+    if (u.uroleplay.clumsy)
+        you_have_been("forever fumbling");
     if (u.uroleplay.blind)
         you_have_been("blind from birth");
     if (u.uroleplay.nudist)
         you_have_been("faithfully nudist");
+    if (u.uroleplay.hallu)
+        you_have_been("hallucinating from birth");
+    if (u.uroleplay.deaf)
+        you_have_been("deaf from birth");
+    if (u.uroleplay.marathon)
+        you_have_been("playing in marathon mode");
+    if (u.uroleplay.heaven_or_hell)
+        you_have_been("following the path of Heaven or Hell");
 
     if (!u.uconduct.food)
         enl_msg(You_, "have gone", "went", " without food", "");
@@ -1916,6 +1959,14 @@ show_conduct(int final)
         you_have_never("engraved Elbereth");
     } else {
         Sprintf(buf, "engraved Elbereth %ld time%s", u.uconduct.elbereth,
+                plur(u.uconduct.elbereth));
+        you_have_X(buf);
+    }
+
+    if (u.uconduct.celibate == 0) {
+        you_have_been("celibate");
+    } else {
+        Sprintf(buf, "engaged in demonic debauchery %ld time%s", u.uconduct.celibate,
                 plur(u.uconduct.elbereth));
         you_have_X(buf);
     }
@@ -2003,6 +2054,21 @@ show_conduct(int final)
         }
         enl_msg(You_, presentverb, pastverb, buf, "");
     }
+
+    /* Splice conducts */
+    if (!u.uconduct.alcohol && final) {
+        you_have_been("a teetotaler");
+    }
+    
+    if (!u.uconduct.pactmaker) {
+        you_have_never("made deals with demonic entities");
+    } else {
+        Sprintf(buf, "made a demonic bargain %ld time%s", u.uconduct.pactmaker,
+                plur(u.uconduct.pactmaker));
+        you_have_X(buf);
+    }
+
+    
 
     show_achievements(final);
 
@@ -2607,11 +2673,23 @@ num_extinct(void)
     return n;
 }
 
+int
+num_encountered(void)
+{
+    int i, n = 0;
+
+    for (i = LOW_PM; i < NUMMONS; ++i) {
+        if ((g.mvitals[i].mvflags & G_KNOWN) == G_EXTINCT)
+            ++n;
+    }
+    return n;
+}
+
 void
 list_genocided(char defquery, boolean ask)
 {
     register int i;
-    int ngenocided, nextinct;
+    int ngenocided, nextinct, nencountered;
     char c;
     winid klwin;
     char buf[BUFSZ];
@@ -2623,6 +2701,7 @@ list_genocided(char defquery, boolean ask)
 
     ngenocided = num_genocides();
     nextinct = num_extinct();
+    nencountered = num_encountered();
 
     /* genocided or extinct species list */
     if (ngenocided != 0 || nextinct != 0) {
@@ -2668,6 +2747,10 @@ list_genocided(char defquery, boolean ask)
             }
             if (nextinct > 0) {
                 Sprintf(buf, "%d species extinct.", nextinct);
+                putstr(klwin, ATR_PREFORM, buf);
+            }
+            if (nencountered > 0) {
+                Sprintf(buf, "%d species encountered.", nextinct);
                 putstr(klwin, ATR_PREFORM, buf);
             }
 
@@ -2830,6 +2913,9 @@ mstatusline(struct monst *mtmp)
     if (mtmp == u.usteed)
         Strcat(info, ", carrying you");
 
+    if (mtmp == u.fearedmon)
+        Strcat(info, ", causing you fear");
+
     /* avoid "Status of the invisible newt ..., invisible" */
     /* and unlike a normal mon_nam, use "saddled" even if it has a name */
     Strcpy(monnambuf, x_monnam(mtmp, ARTICLE_THE, (char *) 0,
@@ -2878,6 +2964,8 @@ ustatusline(void)
     }
     if (Stunned)
         Strcat(info, ", stunned");
+    if (Afraid)
+        Strcat(info, ", frightened");
     if (!u.usteed && Wounded_legs) {
         const char *what = body_part(LEG);
         if ((Wounded_legs & BOTH_SIDES) == BOTH_SIDES)

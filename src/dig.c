@@ -323,6 +323,11 @@ dig(void)
                 else if (uarmf)
                     dmg = (dmg + 1) / 2;
                 You("hit yourself in the %s.", body_part(FOOT));
+                if (Hate_material(uwep->material)) {
+                    /* extra damage already applied by dmgval() */
+                    searmsg(&g.youmonst, &g.youmonst, uwep, FALSE);
+                    exercise(A_CON, FALSE);
+                }
                 Sprintf(kbuf, "chopping off %s own %s", uhis(),
                         body_part(FOOT));
                 losehp(Maybe_Half_Phys(dmg), kbuf, KILLED_BY);
@@ -491,6 +496,8 @@ furniture_handled(int x, int y, boolean madeby_u)
         dryup(x, y, madeby_u);
     } else if (IS_SINK(lev->typ)) {
         breaksink(x, y);
+    } else if (IS_FURNACE(lev->typ)) {
+        breakfurnace(x, y);
     } else if (lev->typ == DRAWBRIDGE_DOWN
                || (is_drawbridge_wall(x, y) >= 0)) {
         int bx = x, by = y;
@@ -1324,8 +1331,10 @@ mdig_tunnel(struct monst *mtmp)
     } else {
         here->typ = CORR, here->flags = 0;
         if (pile && pile < 5)
-            (void) mksobj_at((pile == 1) ? BOULDER : ROCK, mtmp->mx, mtmp->my,
-                             TRUE, FALSE);
+            (void) mksobj_at((pile == 1) ?
+            (mtmp->data==&mons[PM_HUNGER_HULK])? HUGE_CHUNK_OF_MEAT :
+              BOULDER : (mtmp->data==&mons[PM_HUNGER_HULK])
+                ? MEATBALL : ROCK, mtmp->mx, mtmp->my, TRUE, FALSE);
     }
     newsym(mtmp->mx, mtmp->my);
     if (!sobj_at(BOULDER, mtmp->mx, mtmp->my))
@@ -1645,6 +1654,12 @@ adj_pit_checks(coord *cc, char *msg)
 #endif
     } else if (IS_SINK(ltyp)) {
         Strcpy(msg, "A tangled mass of plumbing remains below the sink.");
+        return FALSE;
+    } else if (IS_FURNACE(ltyp)) {
+        Strcpy(msg, "A piping hot pipe remains below the furnace.");
+        return FALSE;
+    } else if (IS_VENT(ltyp)) {
+        Strcpy(msg, "The vent remains intact.");
         return FALSE;
     } else if (On_ladder(cc->x, cc->y)) {
         Strcpy(msg, "The ladder is unaffected.");

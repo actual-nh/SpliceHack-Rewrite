@@ -43,6 +43,7 @@
     <Luafiles Include = "sanctum.lua"/>
     <Luafiles Include = "valley.lua"/>
     <Luafiles Include = "knox.lua"/>
+    <Luafiles Include = "rats.lua"/>
     <Luafiles Include = "minefill.lua"/>
     <Luafiles Include = "minend-1.lua"/>
     <Luafiles Include = "minend-2.lua"/>
@@ -164,6 +165,7 @@
     <UUFiles Include = "$(WinWin32Dir)petmark.uu"/>
     <UUFiles Include = "$(WinWin32Dir)pilemark.uu"/>
     <UUFiles Include = "$(WinWin32Dir)ridingmark.uu"/>
+    <UUFiles Include = "$(WinWin32Dir)templatemark.uu"/>
     <UUFiles Include = "$(WinWin32Dir)splash.uu"/>
     <UUFiles Include = "$(WinWin32Dir)rip.uu"/>
     <UUFiles Include = "$(WinWin32Dir)record.uu"/>
@@ -181,6 +183,7 @@
     <BmpFiles Include = "$(WinWin32Dir)petmark.bmp"/>
     <BmpFiles Include = "$(WinWin32Dir)pilemark.bmp"/>
     <BmpFiles Include = "$(WinWin32Dir)ridingmark.bmp"/>
+    <BmpFiles Include = "$(WinWin32Dir)templatemark.bmp"/>
     <BmpFiles Include = "$(WinWin32Dir)rip.bmp"/>
     <BmpFiles Include = "$(WinWin32Dir)splash.bmp"/>
   </ItemGroup>

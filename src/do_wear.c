@@ -40,6 +40,7 @@ static int menu_remarm(int);
 static void count_worn_stuff(struct obj **, boolean);
 static int armor_or_accessory_off(struct obj *);
 static int accessory_or_armor_on(struct obj *);
+static boolean will_touch_skin(long);
 static void already_wearing(const char *);
 static void already_wearing2(const char *, const char *);
 static int equip_ok(struct obj *, boolean, boolean);
@@ -166,7 +167,7 @@ Boots_on(void)
 
     switch (uarmf->otyp) {
     case LOW_BOOTS:
-    case IRON_SHOES:
+    case DWARVISH_BOOTS:
     case HIGH_BOOTS:
     case JUMPING_BOOTS:
     case KICKING_BOOTS:
@@ -184,6 +185,12 @@ Boots_on(void)
             makeknown(uarmf->otyp);
             You_feel("yourself speed up%s.",
                      (oldprop || HFast) ? " a bit more" : "");
+        }
+        break;
+    case STOMPING_BOOTS:
+        if (!Stealth && !Levitation && !Flying) {
+            You("begin stomping around very loudly.");
+            makeknown(uarmf->otyp);
         }
         break;
     case ELVEN_BOOTS:
@@ -247,6 +254,12 @@ Boots_off(void)
             spoteffects(TRUE);
         }
         break;
+    case STOMPING_BOOTS:
+        if (!Stealth && !Levitation && !Flying) {
+            pline("Your footsteps become considerably less violent.");
+            makeknown(otyp);
+        }
+        break;
     case ELVEN_BOOTS:
         toggle_stealth(otmp, oldprop, FALSE);
         break;
@@ -264,7 +277,7 @@ Boots_off(void)
         }
         break;
     case LOW_BOOTS:
-    case IRON_SHOES:
+    case DWARVISH_BOOTS:
     case HIGH_BOOTS:
     case JUMPING_BOOTS:
     case KICKING_BOOTS:
@@ -287,7 +300,13 @@ Cloak_on(void)
     case DWARVISH_CLOAK:
     case CLOAK_OF_MAGIC_RESISTANCE:
     case ROBE:
-    case LEATHER_CLOAK:
+    case PLAIN_CLOAK:
+    case CLOAK_OF_REFLECTION:
+        break;
+    case CLOAK_OF_FLIGHT:
+        pline("%s into a magnificent pair of wings!",
+            Tobjnam(uarmc, "transform"));
+        makeknown(uarmc->otyp);
         break;
     case CLOAK_OF_PROTECTION:
         makeknown(uarmc->otyp);
@@ -348,7 +367,9 @@ Cloak_off(void)
     case CLOAK_OF_MAGIC_RESISTANCE:
     case OILSKIN_CLOAK:
     case ROBE:
-    case LEATHER_CLOAK:
+    case PLAIN_CLOAK:
+    case CLOAK_OF_REFLECTION:
+    case CLOAK_OF_FLIGHT:
         break;
     case ELVEN_CLOAK:
         toggle_stealth(otmp, oldprop, FALSE);
@@ -389,10 +410,14 @@ Helmet_on(void)
     case FEDORA:
     case HELMET:
     case DENTED_POT:
-    case ELVEN_LEATHER_HELM:
-    case DWARVISH_IRON_HELM:
+    case ELVEN_HELM:
+    case DWARVISH_HELM:
     case ORCISH_HELM:
     case HELM_OF_TELEPATHY:
+    case PUMPKIN:
+        break;
+    case TINFOIL_HAT:
+        pline("Your thoughts feel much more secure.");
         break;
     case HELM_OF_BRILLIANCE:
         adj_abon(uarmh, uarmh->spe);
@@ -466,9 +491,11 @@ Helmet_off(void)
     case FEDORA:
     case HELMET:
     case DENTED_POT:
-    case ELVEN_LEATHER_HELM:
-    case DWARVISH_IRON_HELM:
+    case ELVEN_HELM:
+    case DWARVISH_HELM:
     case ORCISH_HELM:
+    case TINFOIL_HAT:
+    case PUMPKIN:
         break;
     case DUNCE_CAP:
         g.context.botl = 1;
@@ -509,7 +536,9 @@ Gloves_on(void)
         u.uprops[objects[uarmg->otyp].oc_oprop].extrinsic & ~WORN_GLOVES;
 
     switch (uarmg->otyp) {
-    case LEATHER_GLOVES:
+    case GLOVES:
+    case BOXING_GLOVES:
+    case ROGUES_GLOVES:
         break;
     case GAUNTLETS_OF_FUMBLING:
         if (!oldprop && !(HFumbling & ~TIMEOUT))
@@ -563,7 +592,9 @@ Gloves_off(void)
     g.context.takeoff.mask &= ~W_ARMG;
 
     switch (uarmg->otyp) {
-    case LEATHER_GLOVES:
+    case GLOVES:
+    case BOXING_GLOVES:
+    case ROGUES_GLOVES:
         break;
     case GAUNTLETS_OF_FUMBLING:
         if (!oldprop && !(HFumbling & ~TIMEOUT))
@@ -596,6 +627,10 @@ Gloves_off(void)
     if (uwep && uwep->otyp == CORPSE)
         wielding_corpse(uwep, on_purpose);
 
+    /* you may now be touching some material you hate */
+    if (uwep)
+        retouch_object(&uwep, FALSE);
+
     /* KMH -- ...or your secondary weapon when you're wielding it
        [This case can't actually happen; twoweapon mode won't
        engage if a corpse has been set up as the alternate weapon.] */
@@ -622,6 +657,9 @@ Shield_on(void)
     case DWARVISH_ROUNDSHIELD:
     case LARGE_SHIELD:
     case SHIELD_OF_REFLECTION:
+    case RESONANT_SHIELD:
+    case TOWER_SHIELD:
+    case HIDE_SHIELD:
         break;
     default:
         impossible(unknown_type, c_shield, uarms->otyp);
@@ -646,6 +684,9 @@ Shield_off(void)
     case DWARVISH_ROUNDSHIELD:
     case LARGE_SHIELD:
     case SHIELD_OF_REFLECTION:
+    case RESONANT_SHIELD:
+    case TOWER_SHIELD:
+    case HIDE_SHIELD:
         break;
     default:
         impossible(unknown_type, c_shield, uarms->otyp);
@@ -664,6 +705,9 @@ Shirt_on(void)
     case HAWAIIAN_SHIRT:
     case STRIPED_SHIRT:
     case T_SHIRT:
+    case DRESS:
+    case TUXEDO:
+    case GOWN:
         break;
     default:
         impossible(unknown_type, c_shirt, uarmu->otyp);
@@ -684,6 +728,9 @@ Shirt_off(void)
     case HAWAIIAN_SHIRT:
     case STRIPED_SHIRT:
     case T_SHIRT:
+    case DRESS:
+    case TUXEDO:
+    case GOWN:
         break;
     default:
         impossible(unknown_type, c_shirt, uarmu->otyp);
@@ -696,6 +743,12 @@ Shirt_off(void)
 static int
 Armor_on(void)
 {
+
+    if (uarm && (uarm->otyp == GOLD_DRAGON_SCALE_MAIL || uarm->otyp == GOLD_DRAGON_SCALES)) {
+		begin_burn(uarm,FALSE);
+		if(!Blind)
+			pline("%s to glow.",Tobjnam(uarm,"begin"));
+	}
     /*
      * No suits require special handling.  Special properties conferred by
      * suits are set up as intrinsics (actually 'extrinsics') by setworn()
@@ -709,6 +762,11 @@ Armor_on(void)
 int
 Armor_off(void)
 {
+    if (uarm && (uarm->otyp == GOLD_DRAGON_SCALE_MAIL || uarm->otyp == GOLD_DRAGON_SCALES)) {
+		end_burn(uarm,FALSE);
+		if(!Blind)
+			pline("%s glowing.",Tobjnam(uarm,"stop"));
+	}
     g.context.takeoff.mask &= ~W_ARM;
     setworn((struct obj *) 0, W_ARM);
     g.context.takeoff.cancelled_don = FALSE;
@@ -724,6 +782,8 @@ Armor_off(void)
 int
 Armor_gone(void)
 {
+    if (uarm && (uarm->otyp == GOLD_DRAGON_SCALE_MAIL || uarm->otyp == GOLD_DRAGON_SCALES))
+		end_burn(uarm,FALSE);
     g.context.takeoff.mask &= ~W_ARM;
     setnotworn(uarm);
     g.context.takeoff.cancelled_don = FALSE;
@@ -749,6 +809,9 @@ Amulet_on(void)
     case AMULET_OF_REFLECTION:
     case AMULET_OF_MAGICAL_BREATHING:
     case FAKE_AMULET_OF_YENDOR:
+    case AMULET_OF_DRAIN_RESISTANCE:
+    case AMULET_OF_DANGER:
+    case AMULET_OF_REINCARNATION:
         break;
     case AMULET_OF_UNCHANGING:
         if (Slimed)
@@ -786,6 +849,9 @@ Amulet_on(void)
             g.context.botl = TRUE;
             pline("It constricts your throat!");
         }
+        break;
+    case AMULET_OF_NAUSEA:
+        make_vomiting((long) rnd(100), FALSE);
         break;
     case AMULET_OF_RESTFUL_SLEEP: {
         long newnap = (long) rnd(100), oldnap = (HSleepy & TIMEOUT);
@@ -841,6 +907,9 @@ Amulet_off(void)
     case AMULET_OF_CHANGE:
     case AMULET_OF_UNCHANGING:
     case FAKE_AMULET_OF_YENDOR:
+    case AMULET_OF_DRAIN_RESISTANCE:
+    case AMULET_OF_DANGER:
+    case AMULET_OF_REINCARNATION:
         break;
     case AMULET_OF_MAGICAL_BREATHING:
         if (Underwater) {
@@ -872,6 +941,9 @@ Amulet_off(void)
         if (!ESleepy && !(HSleepy & ~TIMEOUT))
             HSleepy &= ~TIMEOUT; /* clear timeout bits */
         return;
+    case AMULET_OF_NAUSEA:
+        make_vomiting(0L, FALSE);
+        break;
     case AMULET_OF_FLYING: {
         boolean was_flying = !!Flying;
 
@@ -969,6 +1041,8 @@ Ring_on(register struct obj *obj)
     case RIN_SLOW_DIGESTION:
     case RIN_SUSTAIN_ABILITY:
     case MEAT_RING:
+    case RIN_PSYCHIC_RESISTANCE:
+    case RIN_SONIC_RESISTANCE:
         break;
     case RIN_STEALTH:
         toggle_stealth(obj, oldprop, TRUE);
@@ -1079,6 +1153,8 @@ Ring_off_or_gone(register struct obj *obj, boolean gone)
     case RIN_SLOW_DIGESTION:
     case RIN_SUSTAIN_ABILITY:
     case MEAT_RING:
+    case RIN_PSYCHIC_RESISTANCE:
+    case RIN_SONIC_RESISTANCE:
         break;
     case RIN_STEALTH:
         toggle_stealth(obj, (EStealth & ~mask), FALSE);
@@ -1201,10 +1277,10 @@ Blindf_on(struct obj *otmp)
     if (changed) {
         toggle_blindness(); /* potion.c */
     }
-
-    if (ublindf->oartifact == ART_LENSES_OF_DEATH_PERCEPTION) {
+    if (ublindf && ublindf->oartifact == ART_LENSES_OF_DEATH_PERCEPTION)
         pline("With madness comes clarity.");
-    }
+    if (ublindf && ublindf->otyp == MASK)
+        if (use_mask(&ublindf)) return; 
 }
 
 void
@@ -1228,7 +1304,7 @@ Blindf_off(struct obj *otmp)
         if (was_blind) {
             /* "still cannot see" makes no sense when removing lenses
                since they can't have been the cause of your blindness */
-            if (otmp->otyp != LENSES)
+            if (otmp->otyp != LENSES && otmp->otyp != MASK)
                 You("still cannot see.");
         } else {
             changed = TRUE; /* !was_blind */
@@ -1246,6 +1322,16 @@ Blindf_off(struct obj *otmp)
     }
     if (changed) {
         toggle_blindness(); /* potion.c */
+    }
+    if (otmp && otmp->otyp == MASK) {
+        if (otmp->blessed) {
+            otmp->blessed = 0;
+            pline("Your mask seems more brittle.");
+        } else if (!otmp->blessed && !otmp->cursed && !rn2(3)) {
+            otmp->cursed = 1;
+            pline("This mask is about to break.");
+        }
+        rehumanize();
     }
 }
 
@@ -1593,7 +1679,8 @@ cursed(struct obj *otmp)
     /* Curses, like chickens, come home to roost. */
     if ((otmp == uwep) ? welded(otmp) : (int) otmp->cursed) {
         boolean use_plural = (is_boots(otmp) || is_gloves(otmp)
-                              || otmp->otyp == LENSES || otmp->quan > 1L);
+                              || otmp->otyp == LENSES
+                              || otmp->otyp == MASK || otmp->quan > 1L);
 
         /* might be trying again after applying grease to hands */
         if (Glib && otmp->bknown
@@ -1903,6 +1990,19 @@ canwearobj(struct obj *otmp, long *mask, boolean noisy)
     return !err;
 }
 
+/* Return TRUE iff wearing a potential new piece of armor with the given mask
+ * will touch the hero's skin. */
+static boolean
+will_touch_skin(mask)
+long mask;
+{
+    if (mask == W_ARMC && (uarm || uarmu))
+        return FALSE;
+    else if (mask == W_ARM && uarmu)
+        return FALSE;
+    return TRUE;
+}
+
 static int
 accessory_or_armor_on(struct obj *obj)
 {
@@ -1913,10 +2013,10 @@ accessory_or_armor_on(struct obj *obj)
         already_wearing(c_that_);
         return 0;
     }
-    armor = (obj->oclass == ARMOR_CLASS);
+    armor = (obj->oclass == ARMOR_CLASS || obj->otyp == PUMPKIN);
     ring = (obj->oclass == RING_CLASS || obj->otyp == MEAT_RING);
     eyewear = (obj->otyp == BLINDFOLD || obj->otyp == TOWEL
-               || obj->otyp == LENSES);
+               || obj->otyp == LENSES || obj->otyp == MASK);
     /* checks which are performed prior to actually touching the item */
     if (armor) {
         if (!canwearobj(obj, &mask, TRUE))
@@ -2020,7 +2120,10 @@ accessory_or_armor_on(struct obj *obj)
             }
 
             if (ublindf) {
-                if (ublindf->otyp == TOWEL)
+                if (ublindf->otyp == MASK)
+                    Your("%s is already covered by a mask.",
+                         body_part(FACE));
+                else if (ublindf->otyp == TOWEL)
                     Your("%s is already covered by a towel.",
                          body_part(FACE));
                 else if (ublindf->otyp == BLINDFOLD) {
@@ -2045,7 +2148,9 @@ accessory_or_armor_on(struct obj *obj)
         }
     }
 
-    if (!retouch_object(&obj, FALSE))
+    /* don't retouch and take material damage if it's a non-artifact object and
+     * your skin is covered */
+    if ((obj->oartifact || will_touch_skin(mask)) && !retouch_object(&obj, FALSE))
         return 1; /* costs a turn even though it didn't get worn */
 
     if (armor) {
@@ -2926,7 +3031,8 @@ equip_ok(struct obj *obj, boolean removing, boolean accessory)
         && obj->oclass != AMULET_CLASS) {
         /* ... except for a few wearable exceptions outside these classes */
         if (obj->otyp != MEAT_RING && obj->otyp != BLINDFOLD
-            && obj->otyp != TOWEL && obj->otyp != LENSES)
+            && obj->otyp != TOWEL && obj->otyp != LENSES
+            && obj->otyp != MASK && obj->otyp != PUMPKIN)
             return GETOBJ_EXCLUDE;
     }
 

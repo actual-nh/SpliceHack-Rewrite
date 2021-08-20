@@ -57,7 +57,7 @@ boulder_hits_pool(struct obj *otmp, int rx, int ry, boolean pushing)
         if (fills_up) {
             struct trap *ttmp = t_at(rx, ry);
 
-            if (ltyp == DRAWBRIDGE_UP) {
+            if (ltyp == DRAWBRIDGE_UP || ltyp == BRIDGE) {
                 levl[rx][ry].drawbridgemask &= ~DB_UNDER; /* clear lava */
                 levl[rx][ry].drawbridgemask |= DB_FLOOR;
             } else
@@ -530,6 +530,12 @@ dosinkring(struct obj *obj)
         case RIN_POLYMORPH_CONTROL:
             pline_The(
                   "sink momentarily looks like a regularly erupting geyser.");
+            break;
+        case RIN_PSYCHIC_RESISTANCE:
+            pline_The("sink glows purple for a moment.");
+            break;
+        case RIN_SONIC_RESISTANCE:
+            pline_The("ring silently bounces down the drain.");
             break;
         default:
             break;
@@ -1376,6 +1382,7 @@ goto_level(d_level *newlevel, boolean at_stairs, boolean falling, boolean portal
     fill_pit(u.ux, u.uy);
     set_ustuck((struct monst *) 0); /* idem */
     u.uswallow = u.uswldtim = 0;
+    remove_fearedmon();
     set_uinwater(0); /* u.uinwater = 0 */
     u.uundetected = 0; /* not hidden, even if means are available */
     if (!Is_blackmarket(newlevel))
@@ -1465,9 +1472,9 @@ goto_level(d_level *newlevel, boolean at_stairs, boolean falling, boolean portal
 
     if (!(g.level_info[new_ledger].flags & LFILE_EXISTS)) {
         /* entering this level for first time; make it now */
-        if (g.level_info[new_ledger].flags & (VISITED)) {
+        if (g.level_info[new_ledger].flags & (FORGOTTEN | VISITED)) {
             impossible("goto_level: returning to discarded level?");
-            g.level_info[new_ledger].flags &= ~(VISITED);
+            g.level_info[new_ledger].flags &= ~(FORGOTTEN | VISITED);
         }
         mklev();
         new = TRUE; /* made the level */
@@ -1616,6 +1623,14 @@ goto_level(d_level *newlevel, boolean at_stairs, boolean falling, boolean portal
         movebubbles();
     else if (Is_firelevel(&u.uz))
         fumaroles();
+
+    /* level forgotten due to amnesia */
+    if (g.level_info[new_ledger].flags & FORGOTTEN) {
+        forget_map(ALL_MAP); /* forget the map */
+        forget_traps();      /* forget all traps too */
+        familiar = TRUE;
+        g.level_info[new_ledger].flags &= ~FORGOTTEN;
+    }
 
     /* Reset the screen. */
     vision_reset(); /* reset the blockages */
@@ -1880,10 +1895,23 @@ revive_corpse(struct obj *corpse)
             break;
 
         case OBJ_FLOOR:
-            if (cansee(mtmp->mx, mtmp->my))
-                pline("%s rises from the dead!",
-                      chewed ? Adjmonnam(mtmp, "bite-covered")
-                             : Monnam(mtmp));
+            if (cansee(mtmp->mx, mtmp->my)) {
+                int pm = monsndx(mtmp->data);
+                if (pm == PM_DEATH) {
+                    pline("%s revives in a whirl of spectral skulls!",
+                        Monnam(mtmp));
+                } else if (pm == PM_PESTILENCE) {
+                    pline("%s rises from the dead in a churning pillar of flies!",
+                        Monnam(mtmp));
+                } else if (pm == PM_FAMINE) {
+                    pline("%s rises from the dead amid a circle of withering crops!",
+                        Monnam(mtmp));
+                } else {
+                    pline("%s rises from the dead!",
+                          chewed ? Adjmonnam(mtmp, "bite-covered")
+                                 : Monnam(mtmp));
+                }
+            }
             break;
 
         case OBJ_MINVENT: /* probably a nymph's */

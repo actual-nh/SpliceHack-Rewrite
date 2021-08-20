@@ -157,12 +157,21 @@ struct u_conduct {     /* number of times... */
     long wisharti;     /* wished for an artifact */
     long elbereth;     /* engraved Elbereth */
     long sokocheat;    /* violated special 'rules' in Sokoban */
+    /* Splice conducts */
+    long alcohol;      /* drank alcohol */
+    long pactmaker;    /* made deals with demons */
+    long celibate;     /* never interacted with amorous demons */
     /* genocides already listed at end of game */
 };
 
 struct u_roleplay {
     boolean blind;  /* permanently blind */
     boolean nudist; /* has not worn any armor, ever */
+    boolean hallu;  /* permanently hallucinating */
+    boolean deaf;   /* permanently deaf */
+    boolean clumsy; /* permanetnly fumbling */
+    boolean marathon; /* cannot heal, fixed high max hp */
+    boolean heaven_or_hell; /* everything has 1 hp */
     long numbones;  /* # of bones files loaded  */
 };
 
@@ -190,6 +199,7 @@ struct Role {
     short questarti; /* index (ART_) of quest artifact (questpgr.c) */
 
     /*** Bitmasks ***/
+    long mhrace;                  /* bit mask of allow races */
     short allow;                  /* bit mask of allowed variations */
 #define ROLE_RACEMASK  0x0ff8     /* allowable races */
 #define ROLE_GENDMASK  0xf000     /* allowable genders */
@@ -418,6 +428,7 @@ struct you {
                    mamax;       /* for monster attribs */
     int ulycn;                  /* lycanthrope type */
     int mfemale;               /* saved human value of flags.female */
+    int hungerprayers;          /* how many times have we prayed away hunger? */
 
     unsigned ucreamed;
     unsigned uswldtim;          /* time you have been swallowed */
@@ -478,11 +489,13 @@ struct you {
     int uinvault;
     struct monst *ustuck;    /* engulfer or grabber, maybe grabbee if Upolyd */
     struct monst *usteed;    /* mount when riding */
+    struct monst *fearedmon; /* object of the player's fear */
     long ugallop;            /* turns steed will run after being kicked */
     int urideturns;          /* time spent riding, for skill advancement */
     int umortality;          /* how many times you died */
     int ugrave_arise;    /* you die and become something aside from a ghost */
     int weapon_slots;        /* unused skill slots */
+    int ulives;              /* lives in heaven or hell mode */
     int skills_advanced;     /* # of advances made so far */
     xchar skill_record[P_SKILL_LIMIT]; /* skill advancements */
     struct skills weapon_skills[P_NUM_SKILLS];

@@ -190,6 +190,26 @@ for your deity, or die in the attempt.  Your hour of
 destiny has come. Once more, you must go bravely with %d.
          ]],
       },
+      legacy_heaven_or_hell = {
+         synopsis = "[You are following the path of Heaven or Hell.]",
+         output = "menu",
+         text = [[Three lives left.
+Two possible endings.
+One touch kills.
+Heaven... or Hell.
+         ]]
+      },
+      legacy_marathon = {
+         synopsis = "[You are the healthiest you will ever be.]",
+         output = "menu",
+         text = [[
+Some are strong because they never show weakness.
+Others are strong because of their character.
+You are strong because you endure.
+
+The race to the amulet is not to be a sprint. It is to be a marathon.
+         ]]
+      },
       angel_edicts = {
          synopsis = "[You must obey the edicts of %d.]",
          output = "menu",
@@ -225,70 +245,6 @@ dark energy, and his features are twisted in hate. He leaps at you, and his
 hands sieze upon the Amulet.
 
 "So thou thought thou couldst evade me, fool."
-         ]]
-      },
-      Dudley_greeting = {
-         synopsis = "[Dudley greets you.]",
-         output = "menu",
-         text = [[
-"Hail, traveler! Come here, and let old Dudley have a look-see at you."
-
-The old man peers at you, and a toothless grin spreads across his
-wizened face.
-
-"Ah. a seeker of the amulet. Chosen by %d, unless Dudley is much mistaken.
-Come, warm your bones by my fire. You have a long journey ahead of you."
-         ]],
-      },
-      Dudley_dungeon = {
-         synopsis = "[Dudley muses on the nature of %Z.]",
-         output = "menu",
-         text = [[
-"These are the aptly-named Dungeons of Doom. How many adventurers have
-passed through these dark halls, in hopes of plundering their riches? Not even
-Dudley can say, but the bones littering the floor speak to their number."
-
-"You already know this, though, do you not? You wish to know something deeper.
-You wish to know about the true nature of this place.
-
-In truth, this place is less of a dungeon, and more of a crossroads. A place
-where myths and legends collide, and story is spliced upon story. 
-An adventurer may be lucky enough to recover a sword from a world not their own, 
-or unfortunate enough to stumble across their own corpse. All things are possible
-within these walls, after a fashion.
-
-Of course, this is but one interpretation, and this place is but one version
-of %Z. Who can say what the nature of this cairn truly is?"
-         ]]
-      },
-      Dudley_combat = {
-         synopsis = "[Dudley gives you some tips about combat.]",
-         output = "menu",
-         text = [[
-
-         ]]
-      },
-      Dudley_amulet = {
-         synopsis = "[Dudley tells you to run.]",
-         output = "menu",
-         text = [[
-The dungeon shudders around you. Dudley waves his arms at you, spittle flying
-from his lips as he yells.
-
-"Flee, you damned fool, flee! This place be not long for the mortal realm! The
-Wizard of puruses you, and he will not stop until he possesses the amulet
-once more."
-
-The dungeon rumbles again, and Dudley sighs, staring up at the rapidly cracking
-ceiling.
-
-"I am an old man. In my time, I have seen this place devour thousands upon thousands
-of adventurers. Among them, but a few have have shown as much spirit as you. Perhaps
-you shall be one of those to escape the cycle."
-
-He smiles wryly, and stares at you with eyes full of both sadness and hope.
-
-"Go. Leave the dungeon. I'll see you on the other side, %p."
          ]]
       },
       Juiblex = {
@@ -444,7 +400,8 @@ Four lashing tentacles, thick with rot.
 Thick, scaly legs ending in knifelike claws.
 The cloying smell of mildew mixed with blood.
 A pair of rabid mandrill heads, their eyes trained on you.
-Prince of Demons.]],
+Prince of Demons.
+Demogorgon.]],
       },
       Death = {
          synopsis = "[You encounter Death.]",

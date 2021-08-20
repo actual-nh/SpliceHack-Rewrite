@@ -406,6 +406,7 @@ polyself(int psflags)
     boolean forcecontrol = (psflags == 1),
             monsterpoly = (psflags == 2),
             formrevert = (psflags == 3),
+            ismolydeus = (psflags == 4),
             draconian = (uarm && Is_dragon_armor(uarm)),
             iswere = (u.ulycn >= LOW_PM),
             isvamp = (is_vampire(g.youmonst.data)
@@ -417,9 +418,14 @@ polyself(int psflags)
         pline("You fail to transform!");
         return;
     }
+    if (ublindf && ublindf->otyp == MASK &&
+        ublindf->corpsenm == monsndx(g.youmonst.data)) {
+        pline("Your mask prevents you from transforming.");
+        return;
+    }
     /* being Stunned|Unaware doesn't negate this aspect of Poly_control */
     if (!Polymorph_control && !forcecontrol && !draconian && !iswere
-        && !isvamp) {
+        && !isvamp && !ismolydeus) {
         if (rn2(20) > ACURR(A_CON)) {
             You1(shudder_for_moment);
             losehp(rnd(30), "system shock", KILLED_BY_AN);
@@ -515,7 +521,7 @@ polyself(int psflags)
         if (isvamp && (tryct <= 0 || mntmp == PM_WOLF || mntmp == PM_FOG_CLOUD
                        || is_bat(&mons[mntmp])))
             goto do_vampyr;
-    } else if (draconian || iswere || isvamp) {
+    } else if (draconian || iswere || isvamp || ismolydeus) {
         /* special changes that don't require polyok() */
         if (draconian) {
  do_merge:
@@ -558,6 +564,8 @@ polyself(int psflags)
                 mntmp = PM_HUMAN; /* Illegal; force newman() */
             else
                 mntmp = u.ulycn;
+        } else if (ismolydeus) {
+            mntmp = PM_MANES;
         } else if (iscirce) {
             mntmp = PM_PIG;
         } else if (isvamp) {
@@ -705,10 +713,12 @@ polymon(int mntmp)
     set_uasmon();
 
     /* New stats for monster, to last only as long as polymorphed.
-     * Currently only strength gets changed.
      */
     if (strongmonst(&mons[mntmp]))
         ABASE(A_STR) = AMAX(A_STR) = STR18(100);
+    /* In the canon of a certain tabletop game, nosferatu are notoriously ugly */
+    if (mntmp == PM_NOSFERATU)
+        ABASE(A_CHA) = AMAX(A_CHA) = 3;
 
     if (Stone_resistance && Stoned) { /* parnes@eniac.seas.upenn.edu */
         make_stoned(0L, "You no longer seem to be petrifying.", 0,
@@ -821,6 +831,8 @@ polymon(int mntmp)
             pline(use_thec, monsterc, "use your horn");
         if (is_mind_flayer(g.youmonst.data))
             pline(use_thec, monsterc, "emit a mental blast");
+        if (is_jumper(g.youmonst.data))
+            pline(use_thec, monsterc, "jump");
         if (g.youmonst.data->msound == MS_SHRIEK) /* worthless, actually */
             pline(use_thec, monsterc, "shriek");
         if (is_vampire(g.youmonst.data) || is_vampshifter(&g.youmonst))
@@ -932,13 +944,19 @@ break_armor(void)
         if ((otmp = uarm) != 0) {
             if (donning(otmp))
                 cancel_don();
-            You("break out of your armor!");
-            exercise(A_STR, FALSE);
-            (void) Armor_gone();
-            useup(otmp);
+            if (otmp->material == SLIME) {
+                Your("armor contorts to fit you.");
+            } else {
+                You("break out of your armor!");
+                exercise(A_STR, FALSE);
+                (void) Armor_gone();
+                useup(otmp);
+            }
         }
         if ((otmp = uarmc) != 0) {
-            if (otmp->oartifact) {
+            if (otmp->material == SLIME) {
+                Your("%s stretches to fit you.", cloak_simple_name(otmp));
+            } else if (otmp->oartifact) {
                 Your("%s falls off!", cloak_simple_name(otmp));
                 (void) Cloak_off();
                 dropp(otmp);
@@ -949,11 +967,16 @@ break_armor(void)
             }
         }
         if (uarmu) {
-            Your("shirt rips to shreds!");
-            useup(uarmu);
+            if (otmp->material == SLIME) {
+                Your("shirt expands to fit you.");
+            } else {
+                Your("shirt rips to shreds!");
+                useup(uarmu);
+            }
         }
     } else if (sliparm(g.youmonst.data)) {
-        if ((otmp = uarm) != 0 && racial_exception(&g.youmonst, otmp) < 1) {
+        if ((otmp = uarm) != 0 && racial_exception(&g.youmonst, otmp) < 1
+            && otmp->material != SLIME) {
             if (donning(otmp))
                 cancel_don();
             Your("armor falls around you!");
@@ -961,20 +984,30 @@ break_armor(void)
             dropp(otmp);
         }
         if ((otmp = uarmc) != 0) {
-            if (is_whirly(g.youmonst.data))
+            if (is_whirly(g.youmonst.data)) {
                 Your("%s falls, unsupported!", cloak_simple_name(otmp));
-            else
+                (void) Cloak_off();
+                dropp(otmp);
+            } else if (otmp->material == SLIME)
+                Your("%s shrinks to fit you.", cloak_simple_name(otmp));
+            else {
                 You("shrink out of your %s!", cloak_simple_name(otmp));
-            (void) Cloak_off();
-            dropp(otmp);
+                (void) Cloak_off();
+                dropp(otmp);
+            }
         }
         if ((otmp = uarmu) != 0) {
-            if (is_whirly(g.youmonst.data))
+            if (is_whirly(g.youmonst.data)) {
                 You("seep right through your shirt!");
-            else
+                setworn((struct obj *) 0, otmp->owornmask & W_ARMU);
+                dropp(otmp);
+            } else if (otmp->material == SLIME)
+                Your("%s shrinks to fit you.", shirt_simple_name(otmp));
+            else {
                 You("become much too small for your shirt!");
-            setworn((struct obj *) 0, otmp->owornmask & W_ARMU);
-            dropp(otmp);
+                setworn((struct obj *) 0, otmp->owornmask & W_ARMU);
+                dropp(otmp);
+            }
         }
     }
     if (has_horns(g.youmonst.data)) {
@@ -1039,7 +1072,7 @@ break_armor(void)
        it/them on (should also come off if head is too tiny or too huge,
        but putting accessories on doesn't reject those cases [yet?]);
        amulet stays worn */
-    if ((otmp = ublindf) != 0 && !has_head(g.youmonst.data)) {
+    if ((otmp = ublindf) != 0 && !has_head(g.youmonst.data) && otmp->otyp != MASK) {
         int l;
         const char *eyewear = simpleonames(otmp); /* blindfold|towel|lenses */
 
@@ -1160,6 +1193,9 @@ rehumanize(void)
     retouch_equipment(2);
     if (!uarmg)
         selftouch(no_longer_petrify_resistant);
+    if (ublindf && ublindf->otyp == MASK) {
+        remove_worn_item(ublindf, FALSE);
+    }
 }
 
 int
@@ -1319,6 +1355,11 @@ dospinweb(void)
             deltrap(ttmp);
             newsym(u.ux, u.uy);
             return 1;
+        case WHIRLWIND_TRAP:
+            You("block the air vents with webbing.");
+            deltrap(ttmp);
+            newsym(u.ux, u.uy);
+            return 1;
         case ROLLING_BOULDER_TRAP:
             You("spin a web, jamming the trigger.");
             deltrap(ttmp);
@@ -1335,6 +1376,8 @@ dospinweb(void)
         case MAGIC_TRAP:
         case ANTI_MAGIC:
         case POLY_TRAP:
+        case ICE_BLOCK_TRAP:
+        case BUZZSAW_TRAP:
             You("have triggered a trap!");
             dotrap(ttmp, 0);
             return 1;
@@ -1389,7 +1432,11 @@ dogaze(void)
             break;
         }
     }
-    if (adtyp != AD_CONF && adtyp != AD_FIRE) {
+
+    if (adtyp == AD_HNGY || adtyp == AD_LUCK) adtyp = AD_CONF;
+
+    if (adtyp != AD_CONF && adtyp != AD_FIRE && adtyp != AD_SLEE && adtyp != AD_FEAR
+        && adtyp != AD_STUN && adtyp != AD_TLPT && adtyp != AD_PLYS && adtyp != AD_COLD) {
         impossible("gaze attack %d?", adtyp);
         return 0;
     }
@@ -1447,6 +1494,8 @@ dogaze(void)
                         pline("%s is getting more and more confused.",
                               Monnam(mtmp));
                     mtmp->mconf = 1;
+                } else if (adtyp == AD_FEAR) {
+                    monflee(mtmp, rnd(10), FALSE, TRUE);
                 } else if (adtyp == AD_FIRE) {
                     int dmg = d(2, 6), lev = (int) u.ulevel;
 
@@ -1467,6 +1516,45 @@ dogaze(void)
                         mtmp->mhp -= dmg;
                     if (DEADMONSTER(mtmp))
                         killed(mtmp);
+                } else if (adtyp == AD_COLD) {
+                    int dmg = d(2, 6), lev = (int) u.ulevel;
+
+                    You("attack %s with a chilling gaze!", mon_nam(mtmp));
+                    if (resists_cold(mtmp)) {
+                        pline_The("cold doesn't harm %s!", mon_nam(mtmp));
+                        dmg = 0;
+                    }
+                    if (lev > rn2(20))
+                        (void) destroy_mitem(mtmp, POTION_CLASS, AD_COLD);
+                    if (dmg)
+                        mtmp->mhp -= dmg;
+                    if (DEADMONSTER(mtmp))
+                        killed(mtmp);
+                } else if (adtyp == AD_PLYS) {
+                    You("fix %s with an aberrant glare...", mon_nam(mtmp));
+                    if (mtmp->data == &mons[PM_NOSFERATU]) {
+                        pline("%s looks disdainful, and mutters something about amateurs.", Monnam(mtmp));
+                    } else if (is_undead(mtmp->data) || mindless(mtmp->data) 
+                                || is_demon(mtmp->data)) {
+                        pline("%s does not seem to care.", Monnam(mtmp));
+                    } else {
+                        pline("%s reels in shock and horror!", Monnam(mtmp));
+                        paralyze_monst(mtmp, rnd(10));
+                    }
+                } else if (adtyp == AD_STUN) {
+                    pline("%s %s for a moment.", Monnam(mtmp),
+                        makeplural(stagger(mtmp->data, "stagger")));
+                    mtmp->mstun = 1;
+                } else if (adtyp == AD_TLPT) {
+                    char nambuf[BUFSZ];
+                    /* record the name before losing sight of monster */
+                    Strcpy(nambuf, Monnam(mtmp));
+                    if (u_teleport_mon(mtmp, FALSE)
+                        && !(canseemon(mtmp)))
+                        pline("%s suddenly disappears!", nambuf);
+                } else if (adtyp == AD_SLEE) {
+                    pline("%s falls into a trance.", Monnam(mtmp));
+                    mtmp->msleeping = 1;
                 }
                 /* For consistency with passive() in uhitm.c, this only
                  * affects you if the monster is still alive.
@@ -1798,6 +1886,8 @@ mbodypart(struct monst *mon, int part)
         || mptr == &mons[PM_KI_RIN]
         || (mptr == &mons[PM_ROTHE] && part != HAIR))
         return horse_parts[part];
+    if (has_beak(mptr) && part == NOSE)
+        return "beak";
     if (mptr->mlet == S_LIGHT) {
         if (part == HANDED)
             return "rayed";
@@ -1887,17 +1977,18 @@ armor_to_dragon(int atyp)
     case SILVER_DRAGON_SCALE_MAIL:
     case SILVER_DRAGON_SCALES:
         return PM_SILVER_DRAGON;
-#if 0 /* DEFERRED */
     case SHIMMERING_DRAGON_SCALE_MAIL:
     case SHIMMERING_DRAGON_SCALES:
         return PM_SHIMMERING_DRAGON;
-#endif
     case RED_DRAGON_SCALE_MAIL:
     case RED_DRAGON_SCALES:
         return PM_RED_DRAGON;
     case ORANGE_DRAGON_SCALE_MAIL:
     case ORANGE_DRAGON_SCALES:
         return PM_ORANGE_DRAGON;
+    case VIOLET_DRAGON_SCALE_MAIL:
+    case VIOLET_DRAGON_SCALES:
+        return PM_VIOLET_DRAGON;
     case WHITE_DRAGON_SCALE_MAIL:
     case WHITE_DRAGON_SCALES:
         return PM_WHITE_DRAGON;
@@ -1910,6 +2001,9 @@ armor_to_dragon(int atyp)
     case GREEN_DRAGON_SCALE_MAIL:
     case GREEN_DRAGON_SCALES:
         return PM_GREEN_DRAGON;
+    case GOLD_DRAGON_SCALE_MAIL:
+	    case GOLD_DRAGON_SCALES:
+		return PM_GOLD_DRAGON;
     case YELLOW_DRAGON_SCALE_MAIL:
     case YELLOW_DRAGON_SCALES:
         return PM_YELLOW_DRAGON;
@@ -1936,7 +2030,8 @@ polysense(void)
         break;
     case PM_VAMPIRE:
     case PM_VAMPIRE_LEADER:
-        g.context.warntype.polyd = M2_HUMAN | M2_ELF;
+    case PM_VAMPIRE_MAGE:
+        g.context.warntype.polyd = MH_HUMAN | MH_ELF;
         HWarn_of_mon |= FROMRACE;
         return;
     }

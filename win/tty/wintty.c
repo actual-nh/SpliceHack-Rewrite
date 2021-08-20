@@ -1150,6 +1150,7 @@ setup_racemenu(winid win, boolean filtering, int role, int gend, int algn)
     boolean race_ok;
     int i;
     char this_ch;
+    char high_ch;
 
     any = cg.zeroany;
     for (i = 0; races[i].noun; i++) {
@@ -1164,13 +1165,25 @@ setup_racemenu(winid win, boolean filtering, int role, int gend, int algn)
         else
             any.a_string = races[i].noun;
         this_ch = *races[i].noun;
+        high_ch = highc(this_ch);
+        if (this_ch == 'd') {
+            if (!strcmp(races[i].noun, "drow"))
+                this_ch = 'D';
+            else
+                high_ch = 0;
+        } else if (this_ch == 'g') {
+            if (!strcmp(races[i].noun, "ghoul"))
+                this_ch = 'G';
+            else
+                high_ch = 0;
+        }
         /* filtering: picking race, so choose by first letter, with
            capital letter as unseen accelerator;
            !filtering: resetting filter rather than picking, choose by
            capital letter since lowercase role letters will be present */
         add_menu(win, &nul_glyphinfo, &any,
-                 filtering ? this_ch : highc(this_ch),
-                 filtering ? highc(this_ch) : 0,
+                 filtering ? this_ch : high_ch,
+                 filtering ? high_ch : 0,
                  ATR_NONE, races[i].noun,
                  (!filtering && !race_ok)
                     ? MENU_ITEMFLAGS_SELECTED : MENU_ITEMFLAGS_NONE);
@@ -3429,6 +3442,13 @@ tty_print_glyph(winid window, xchar x, xchar y,
         term_start_attr(ATR_INVERSE);
         inverse_on = TRUE;
         ttyDisplay->color = CLR_BRIGHT_MAGENTA;
+        term_start_color(ttyDisplay->color);
+    } else if ((special & MG_TEMPLATE) && iflags.use_inverse) {
+        if (ttyDisplay->color != NO_COLOR)
+            term_end_color();
+        term_start_attr(ATR_INVERSE);
+        inverse_on = TRUE;
+        ttyDisplay->color = CLR_ORANGE;
         term_start_color(ttyDisplay->color);
     }
 #endif

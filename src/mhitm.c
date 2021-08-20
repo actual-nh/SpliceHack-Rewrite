@@ -204,7 +204,7 @@ mdisplacem(register struct monst *magr, register struct monst *mdef,
         return MM_MISS;
 
     /* Grid bugs cannot displace at an angle. */
-    if (pa == &mons[PM_GRID_BUG] && magr->mx != mdef->mx
+    if (horizontal_mover(pa) && magr->mx != mdef->mx
         && magr->my != mdef->my)
         return MM_MISS;
 
@@ -288,6 +288,7 @@ mattackm(register struct monst *magr, register struct monst *mdef)
         dieroll = 0;
     struct attack *mattk, alt_attk;
     struct obj *mwep;
+    struct obj * marmf = which_armor(magr, W_ARMF);
     struct permonst *pa, *pd;
 
     if (!magr || !mdef)
@@ -298,9 +299,24 @@ mattackm(register struct monst *magr, register struct monst *mdef)
     pd = mdef->data;
 
     /* Grid bugs cannot attack at an angle. */
-    if (pa == &mons[PM_GRID_BUG] && magr->mx != mdef->mx
+    if ((horizontal_mover(pa))
+        && magr->mx != mdef->mx
         && magr->my != mdef->my)
         return MM_MISS;
+    
+    if (marmf && marmf->otyp == STOMPING_BOOTS && verysmall(mdef->data)
+        && distmin(magr->mx,magr->my,mdef->mx,mdef->my) <= 1) {
+        if (canseemon(magr)) {
+            pline("%s stomps on %s!", Monnam(magr), mon_nam(mdef));
+            makeknown(marmf->otyp);
+        } else if (!Deaf) {
+            You_hear(mdef->data->mlet ? "a disgusting crunch." : "a loud squelch.");
+        }
+        mondead(mdef);
+        if (magr && DEADMONSTER(mdef)) {
+            return MM_DEF_DIED;
+        }
+    }
 
     /* Calculate the armour class differential. */
     tmp = find_mac(mdef) + magr->m_lev;
@@ -416,8 +432,9 @@ mattackm(register struct monst *magr, register struct monst *mdef)
                 res[i] = hitmm(magr, mdef, mattk, mwep, dieroll);
                 if ((mdef->data == &mons[PM_BLACK_PUDDING]
                      || mdef->data == &mons[PM_BROWN_PUDDING])
-                    && (mwep && (objects[mwep->otyp].oc_material == IRON
-                                 || objects[mwep->otyp].oc_material == METAL))
+                    && (mwep && (mwep->material == IRON
+                                 || mwep->material == COLD_IRON
+                                 || mwep->material == METAL))
                     && mdef->mhp > 1 && !mdef->mcan) {
                     struct monst *mclone;
 
@@ -552,6 +569,11 @@ hitmm(register struct monst *magr, register struct monst *mdef,
 
     pre_mm_attack(magr, mdef);
 
+    /* Possibly awaken nearby monsters */
+    if ((!is_silent(magr->data) || !helpless(mdef)) && rn2(10)) {
+        wake_nearto(magr->mx, magr->my, combat_noise(magr->data));
+    }
+
     if (g.vis) {
         int compat;
         char buf[BUFSZ];
@@ -570,13 +592,17 @@ hitmm(register struct monst *magr, register struct monst *mdef,
             buf[0] = '\0';
             switch (mattk->aatyp) {
             case AT_BITE:
-                Snprintf(buf, sizeof(buf), "%s bites", magr_name);
+                Snprintf(buf, sizeof(buf), "%s %ss", magr_name, has_beak(magr->data) ?
+                                   "peck" : "bite");
+                break;
+            case AT_KICK:
+                Snprintf(buf, sizeof(buf), "%s kicks", magr_name);
                 break;
             case AT_STNG:
                 Snprintf(buf, sizeof(buf), "%s stings", magr_name);
                 break;
             case AT_BUTT:
-                Snprintf(buf, sizeof(buf), "%s butts", magr_name);
+                Snprintf(buf, sizeof(buf), "%s %s", magr_name, has_horns(magr->data) ? "gores" : "butts");
                 break;
             case AT_TUCH:
                 Snprintf(buf, sizeof(buf), "%s touches", magr_name);
@@ -584,6 +610,17 @@ hitmm(register struct monst *magr, register struct monst *mdef,
             case AT_TENT:
                 Snprintf(buf, sizeof(buf), "%s tentacles suck", s_suffix(magr_name));
                 break;
+            case AT_WEAP:
+                if (MON_WEP(magr)) {
+                    if (is_launcher(MON_WEP(magr)) ||
+                        is_missile(MON_WEP(magr)) ||
+                        is_ammo(MON_WEP(magr)) ||
+                        is_pole(MON_WEP(magr)))
+                            Snprintf(buf, sizeof(buf), "%s hits", magr_name);
+                    else Snprintf(buf, sizeof(buf), "%s %s", magr_name,
+                        makeplural(weaphitmsg(MON_WEP(magr),FALSE)));
+                    break;
+                } /*FALLTHRU*/
             case AT_HUGS:
                 if (magr != u.ustuck) {
                     Snprintf(buf, sizeof(buf), "%s squeezes", magr_name);
@@ -597,28 +634,6 @@ hitmm(register struct monst *magr, register struct monst *mdef,
             }
             if (*buf)
                 pline("%s %s.", buf, mon_nam_too(mdef, magr));
-
-            if (mon_hates_silver(mdef) && silverhit) {
-                char *mdef_name = mon_nam_too(mdef, magr);
-
-                /* note: mon_nam_too returns a modifiable buffer; so
-                   does s_suffix, but it returns a single static buffer
-                   and we might be calling it twice for this message */
-                Strcpy(magr_name, s_suffix(magr_name));
-                if (!noncorporeal(mdef->data) && !amorphous(mdef->data)) {
-                    if (mdef != magr) {
-                        mdef_name = s_suffix(mdef_name);
-                    } else {
-                        (void) strsubst(mdef_name, "himself", "his own");
-                        (void) strsubst(mdef_name, "herself", "her own");
-                        (void) strsubst(mdef_name, "itself", "its own");
-                    }
-                    Strcat(mdef_name, " flesh");
-                }
-
-                pline("%s %s sears %s!", magr_name, /*s_suffix(magr_name), */
-                      simpleonames(mwep), mdef_name);
-            }
         }
     } else
         noises(magr, mattk);
@@ -758,7 +773,7 @@ gulpmm(register struct monst *magr, register struct monst *mdef,
     for (obj = mdef->minvent; obj; obj = obj->nobj)
         (void) snuff_lit(obj);
 
-    if (is_vampshifter(mdef)
+    if (is_vampshifter(mdef) && !templated(mdef, MT_VAMPIRIC)
         && newcham(mdef, &mons[mdef->cham], FALSE, FALSE)) {
         if (g.vis) {
             /* 'it' -- previous form is no longer available and

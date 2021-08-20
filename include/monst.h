@@ -141,6 +141,7 @@ struct monst {
     Bitfield(mcanmove, 1);  /* paralysis, similar to mblinded */
 
     Bitfield(mconf, 1);     /* confused */
+    Bitfield(mreflect, 1);  /* reflects things */
     Bitfield(mpeaceful, 1); /* does not attack unprovoked */
     Bitfield(mtrapped, 1);  /* trapped in a pit, web or bear trap */
     Bitfield(mleashed, 1);  /* monster is on a leash */
@@ -151,8 +152,9 @@ struct monst {
 
     Bitfield(iswiz, 1);     /* is the Wizard of Yendor */
     Bitfield(wormno, 5);    /* at most 31 worms on any level */
+    Bitfield(mwither, 1);   /* is withering away */
     Bitfield(mtemplit, 1);  /* temporarily seen; only valid during bhit() */
-    /* 1 free bit */
+    /* 7 free bits */
 
 #define MAX_NUM_WORMS 32    /* should be 2^(wormno bitfield size) */
 
@@ -207,7 +209,8 @@ struct monst {
 #define is_starting_pet(mon) ((mon)->m_id == g.context.startingpet_mid)
 #define is_vampshifter(mon)                                      \
     ((mon)->cham == PM_VAMPIRE || (mon)->cham == PM_VAMPIRE_LEADER \
-     || (mon)->cham == PM_VLAD_THE_IMPALER)
+     || (mon)->cham == PM_VLAD_THE_IMPALER || (mon)->cham == PM_VAMPIRE_MAGE \
+     || templated(mon, MT_VAMPIRIC))
 #define vampshifted(mon) (is_vampshifter((mon)) && !is_vampire((mon)->data))
 
 /* monsters which cannot be displaced: priests, shopkeepers, vault guards,
@@ -245,6 +248,11 @@ struct monst {
 /* Macros for whether a type of monster is too strong for a specific level. */
 #define montoostrong(monindx, lev) (mons[monindx].difficulty > lev)
 #define montooweak(monindx, lev) (mons[monindx].difficulty < lev)
+
+#define helpless(mon) ((mon)->msleeping || !(mon)->mcanmove)
+
+/* Unknown demons */
+#define unknown_demon(monnum) ((g.mvitals[monnum].mvflags & G_KNOWN) == 0 && is_unkdemon(&mons[monnum]))
 
 #ifdef PMNAME_MACROS
 #define Mgender(mon) ((mon)->female ? FEMALE : MALE)

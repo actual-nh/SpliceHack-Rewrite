@@ -59,7 +59,7 @@ explode(
             /* most attack wands produce specific explosions;
                other types produce a generic magical explosion */
             if (objects[type].oc_dir == RAY
-                && type != WAN_DIGGING && type != WAN_SLEEP) {
+                && type != WAN_DIGGING && type != WAN_WATER && type != WAN_SLEEP) {
                 type -= WAN_MAGIC_MISSILE;
                 if (type < 0 || type > 9) {
                     impossible("explode: wand has bad zap type (%d).", type);
@@ -739,7 +739,7 @@ scatter(int sx, int sy,  /* location of objects to scatter */
 
             /* 1 in 10 chance of destruction of obj; glass, egg destruction */
         } else if ((scflags & MAY_DESTROY) != 0
-                   && (!rn2(10) || (objects[otmp->otyp].oc_material == GLASS
+                   && (!rn2(10) || (otmp->material == GLASS
                                     || otmp->otyp == EGG))) {
             if (breaks(otmp, (xchar) sx, (xchar) sy))
                 used_up = TRUE;
@@ -893,7 +893,10 @@ adtyp_to_expltype(const int adtyp)
     case AD_SPEL:
     case AD_DREN:
     case AD_ENCH:
+    case AD_PSYC:
         return EXPL_MAGICAL;
+    case AD_LOUD:
+        return EXPL_DARK;
     case AD_FIRE:
         return EXPL_FIERY;
     case AD_COLD:
@@ -903,6 +906,7 @@ adtyp_to_expltype(const int adtyp)
     case AD_DRCO:
     case AD_DISE:
     case AD_PEST:
+    case AD_ACID:
     case AD_PHYS: /* gas spore */
         return EXPL_NOXIOUS;
     default:

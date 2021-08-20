@@ -1273,7 +1273,7 @@ see_monsters(void)
         newsym(mon->mx, mon->my);
         if (mon->wormno)
             see_wsegs(mon);
-        if (Warn_of_mon && (g.context.warntype.obj & mon->data->mflags2) != 0L)
+        if (Warn_of_mon && (g.context.warntype.obj & mon->data->mhflags) != 0L)
             new_warn_obj_cnt++;
     }
 
@@ -1868,8 +1868,14 @@ back_to_glyph(xchar x, xchar y)
     case FOUNTAIN:
         idx = S_fountain;
         break;
+    case VENT:
+        idx = S_vent;
+        break;
     case SINK:
         idx = S_sink;
+        break;
+    case FURNACE:
+        idx = S_furnace;
         break;
     case ALTAR:
         idx = S_altar;
@@ -1885,6 +1891,9 @@ back_to_glyph(xchar x, xchar y)
         break;
     case ICE:
         idx = S_ice;
+        break;
+    case BRIDGE:
+        idx = S_bridge;
         break;
     case AIR:
         idx = S_air;
@@ -2030,6 +2039,9 @@ get_bk_glyph(xchar x, xchar y)
         case ICE:
            idx = S_ice;
            break;
+        case BRIDGE:
+            idx = S_bridge;
+            break;
         case AIR:
            idx = S_air;
            break;
@@ -2110,6 +2122,9 @@ static const int explcolors[] = {
 
 #define is_objpile(x,y) (!Hallucination && g.level.objects[(x)][(y)] \
                          && g.level.objects[(x)][(y)]->nexthere)
+#define is_templatemon(x,y) (!Hallucination && g.level.monsters[(x)][(y)] \
+                             && has_etemplate(g.level.monsters[(x)][(y)]) \
+                             && montemplates[ETEMPLATE(g.level.monsters[(x)][(y)])->template_index].difficulty)
 
 #define GMAP_SET                 0x00000001
 #define GMAP_ROGUELEVEL          0x00000002
@@ -2395,6 +2410,8 @@ map_glyphinfo(xchar x, xchar y, int glyph,
                 color = HI_DOMESTIC;
 #endif
         }
+        if (is_templatemon(x,y))
+            special |= MG_TEMPLATE;
         do_mon_checks = TRUE;
     }
 
@@ -2465,7 +2482,9 @@ static const char *type_names[MAX_TYPE] = {
     "CROSSWALL", "TUWALL", "TDWALL", "TLWALL", "TRWALL", "DBWALL", "TREE",
     "SDOOR", "SCORR", "POOL", "MOAT", "WATER", "DRAWBRIDGE_UP", "LAVAPOOL",
     "IRON_BARS", "DOOR", "CORR", "ROOM", "STAIRS", "LADDER", "FOUNTAIN",
-    "THRONE", "SINK", "GRAVE", "ALTAR", "ICE", "DRAWBRIDGE_DOWN", "AIR",
+    "VENT",
+    "THRONE", "SINK", "FURNACE", "GRAVE", "ALTAR", "ICE", "BRIDGE",
+    "DRAWBRIDGE_DOWN", "AIR",
     "CLOUD"
 };
 

@@ -85,6 +85,9 @@ msummon(struct monst *mon)
                                                        : ndemon(atyp);
         cnt = ((dtype != NON_PM)
                && !rn2(4) && is_ndemon(&mons[dtype])) ? 2 : 1;
+    } else if (ptr == &mons[PM_MOLYDEUS]) {
+        dtype = PM_MANES;
+        cnt = 1 + rn2(3);
     } else if (is_dlord(ptr)) {
         dtype = (!rn2(50)) ? dprince(atyp) : (!rn2(20)) ? dlord(atyp)
                                                         : ndemon(atyp);
@@ -222,6 +225,54 @@ summon_minion(aligntyp alignment, boolean talk)
     }
 }
 
+/* A boss monster (if not yet encountered, as determined by STRAT_APPEARMSG)
+ * makes a dramatic entrance.
+ * Might not actually be passed a boss. Return TRUE if it is a boss and we did
+ * print the dramatic entrance; FALSE otherwise. */
+boolean
+boss_entrance(mtmp)
+struct monst* mtmp;
+{
+    struct permonst* mdat = mtmp->data;
+    int mondx = monsndx(mdat);
+    if (g.mvitals[mondx].died > 0) {
+        /* Never print entrance message if the player already killed it. */
+        return FALSE;
+    }
+    if (!canspotmon(mtmp)) {
+        /* Assume the messages depend on you being able to spot it, so no
+         * dramatic entrance if you can't. */
+        return FALSE;
+    }
+    /* Never print message if this monster isn't marked to give one. */
+    if ((mtmp->mstrategy & STRAT_APPEARMSG) == 0) {
+        return FALSE;
+    }
+    /* ... and then turn off any other appearance message they were going to
+     * get. */
+    mtmp->mstrategy &= ~STRAT_APPEARMSG;
+    if (is_dprince(mdat) || is_dlord(mdat) || is_rider(mdat)) {
+        /* Assumes Juiblex is first defined demon lord */
+        com_pager(m_monnam(mtmp));
+        return TRUE;
+    }
+    else if (mondx == PM_WIZARD_OF_YENDOR) {
+        com_pager("Wizard_of_Yendor");
+        return TRUE;
+    }
+    else if (mondx == PM_VLAD_THE_IMPALER) {
+        com_pager("Vlad_the_Impaler");
+        return TRUE;
+    }
+#if 0 /* Deferred because currently this would hardly ever happen. */
+    else if (mondx == PM_MEDUSA) {
+        com_pager(QT_MEDUSA_APPEARS);
+        return TRUE;
+    }
+#endif
+    return FALSE;
+}
+
 #define Athome (Inhell && (mtmp->cham == NON_PM))
 
 /* returns 1 if it won't attack. */
@@ -229,6 +280,8 @@ int
 demon_talk(register struct monst *mtmp)
 {
     long cash, demand, offer;
+    struct obj *otmp = 0, *obj = 0;
+    int n = 0;
 
     if (uwep && (uwep->oartifact == ART_EXCALIBUR
                  || uwep->oartifact == ART_DEMONBANE)) {
@@ -257,8 +310,8 @@ demon_talk(register struct monst *mtmp)
         boolean wasunseen = !canspotmon(mtmp);
 
         mtmp->minvis = mtmp->perminvis = 0;
-        if (wasunseen && canspotmon(mtmp)) {
-            pline("%s appears before you.", Amonnam(mtmp));
+        if (!boss_entrance(mtmp)) {
+            /* impossible("demon_talk: still can't see monster?"); */
             mtmp->mstrategy &= ~STRAT_APPEARMSG;
         }
         newsym(mtmp->mx, mtmp->my);
@@ -270,6 +323,104 @@ demon_talk(register struct monst *mtmp)
             (void) rloc(mtmp, TRUE);
         return 1;
     }
+
+    /* based off steal.c code */
+    for (n = 0, obj = g.invent; obj; obj = obj->nobj){
+        if ((obj->oartifact &&
+            obj->oartifact != ART_STING && obj->oartifact != ART_ORCRIST
+            && obj->otyp != AMULET_OF_YENDOR && obj->otyp != BELL_OF_OPENING
+            && obj->otyp != CANDELABRUM_OF_INVOCATION &&
+            obj->otyp != SPE_BOOK_OF_THE_DEAD) || obj->otyp == WAN_WISHING
+            || obj->otyp == BAG_OF_HOLDING || obj->otyp == PLAYING_CARD_DECK
+            || obj->otyp == DECK_OF_FATE)
+            ++n, otmp = obj;
+    }
+    if (n > 1) {
+        n = rnd(n);
+        for (otmp = g.invent; otmp; otmp = otmp->nobj)
+            if ((otmp->oartifact || otmp->otyp == WAN_WISHING ||
+                otmp->otyp == BAG_OF_HOLDING || otmp->otyp == PLAYING_CARD_DECK ||
+                otmp->otyp == DECK_OF_FATE) && !--n)
+                break;
+    }
+    if ((otmp && otmp->otyp == DECK_OF_FATE) ||
+        (otmp && otmp->otyp == PLAYING_CARD_DECK)) {
+        pline("%s notes you have a deck of cards in your possession.",
+              Amonnam(mtmp));
+        pline("%s offers to play you for dominion of your soul.",
+              Amonnam(mtmp));
+        if (yn("Play cards with the demon?") == 'n') {
+            pline("%s gets angry...", Amonnam(mtmp));
+            mtmp->mpeaceful = 0;
+            set_malign(mtmp);
+            return 0;
+        } else {
+            use_deck(otmp);
+            if (otmp->otyp == DECK_OF_FATE) {
+                /* expand in the future to allow demon drawing :) */
+                pline("%s realizes what deck you are playing with and vanishes with a panicked look!",
+                      Amonnam(mtmp));
+                mongone(mtmp);
+                return (1);
+            } else {
+                if (rnd(13) > Luck) {
+                    pline("Unfortunately, %s beats you.", Amonnam(mtmp));
+                    pline("%s laughs and crushes the deck of cards.",
+                          Amonnam(mtmp));
+                    mtmp->mpeaceful = 0;
+                    set_malign(mtmp);
+                    useup(otmp);
+                    return 0;
+                } else {
+                    pline("You hand beats %s!", Amonnam(mtmp));
+                    pline("%s vanishes, congratulating you on a game well played.",
+                          Amonnam(mtmp));
+                    mongone(mtmp);
+                    livelog_printf(LL_UMONST, "beat %s in a game of chance",
+                                Amonnam(mtmp));
+                    useup(otmp);
+                    return (1);
+                }
+            }
+        }
+    } else if (otmp) {
+        pline("%s speaks to you. \"I see you have %s in your possession...\"",
+              Amonnam(mtmp), the(xname(otmp)));
+        /* copied from steal.c */
+        if (yn("Give up your item?") == 'y') {
+            if ((otmp == uarm || otmp == uarmu) && uarmc)
+                remove_worn_item(uarmc, FALSE);
+            if (otmp == uarmu && uarm)
+                remove_worn_item(uarm, FALSE);
+            if ((otmp == uarmg || ((otmp == uright || otmp == uleft) && uarmg))
+                && uwep) {
+                /* gloves are about to be unworn; unwield weapon(s) first */
+                if (u.twoweap)    /* remove_worn_item(uswapwep) indirectly */
+                    remove_worn_item(uswapwep, FALSE); /* clears u.twoweap */
+                remove_worn_item(uwep, FALSE);
+            }
+            if ((otmp == uright || otmp == uleft) && uarmg)
+                /* calls Gloves_off() to handle wielded cockatrice corpse */
+                remove_worn_item(uarmg, FALSE);
+
+            /* finally, steal the target item */
+            if (otmp->owornmask)
+                remove_worn_item(otmp, TRUE);
+            /* I shudder to think of the situation where this would happen. */
+            if (otmp->unpaid)
+                subfrombill(otmp, shop_keeper(*u.ushops));
+            freeinv(otmp);
+            (void) mpickobj(mtmp, otmp);
+            pline("%s takes %s from you!", Monnam(mtmp), the(xname(otmp)));
+            pline("%s laughs and vanishes. \"I look forward to seeing what becomes of your little quest.\"",
+                  Amonnam(mtmp));
+            livelog_printf(LL_UMONST, "bribed %s with %s for safe passage",
+                        Amonnam(mtmp), xname(otmp));
+            mongone(mtmp);
+            return (1);
+        }
+    }
+
     cash = money_cnt(g.invent);
     demand =
         (cash * (rnd(80) + 20 * Athome))
@@ -292,6 +443,7 @@ demon_talk(register struct monst *mtmp)
         if ((offer = bribe(mtmp)) >= demand) {
             pline("%s vanishes, laughing about cowardly mortals.",
                   Amonnam(mtmp));
+            u.uconduct.pactmaker++;
             livelog_printf(LL_UMONST, "bribed %s with %ld %s for safe passage",
                            Amonnam(mtmp), offer, currency(offer));
         } else if (offer > 0L
@@ -300,6 +452,7 @@ demon_talk(register struct monst *mtmp)
                   Amonnam(mtmp));
             livelog_printf(LL_UMONST, "bribed %s with %ld %s for safe passage",
                            Amonnam(mtmp), offer, currency(offer));
+            u.uconduct.pactmaker++;
         } else {
             pline("%s gets angry...", Amonnam(mtmp));
             mtmp->mpeaceful = 0;
@@ -486,7 +639,7 @@ gain_guardian_angel(void)
             mtmp->mhp = mtmp->mhpmax =
                 d((int) mtmp->m_lev, 10) + 30 + rnd(30);
             if ((otmp = select_hwep(mtmp)) == 0) {
-                otmp = mksobj(SILVER_SABER, FALSE, FALSE);
+                otmp = mksobj(SABER, FALSE, FALSE);
                 if (mpickobj(mtmp, otmp))
                     panic("merged weapon?");
             }

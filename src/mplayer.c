@@ -151,7 +151,7 @@ mk_mplayer(struct permonst *ptr, xchar x, xchar y, boolean special)
         cloak  = !rn2(8) ? STRANGE_OBJECT
                          : rnd_class(OILSKIN_CLOAK, CLOAK_OF_DISPLACEMENT);
         helm   = !rn2(8) ? STRANGE_OBJECT
-                         : rnd_class(ELVEN_LEATHER_HELM, HELM_OF_TELEPATHY);
+                         : rnd_class(ELVEN_HELM, HELM_OF_TELEPATHY);
         shield = !rn2(8) ? STRANGE_OBJECT
                          : rnd_class(ELVEN_SHIELD, SHIELD_OF_REFLECTION);
 
@@ -214,7 +214,7 @@ mk_mplayer(struct permonst *ptr, xchar x, xchar y, boolean special)
             if (rn2(4))
                 weapon = SCIMITAR;
             if (rn2(3))
-                armor = LEATHER_JACKET;
+                armor = JACKET;
             (void) mongets(mtmp, POT_BOOZE);
             break;
         case PM_CLERIC:
@@ -297,7 +297,7 @@ mk_mplayer(struct permonst *ptr, xchar x, xchar y, boolean special)
             if (weapon == WAR_HAMMER) /* valkyrie: wimpy weapon or Mjollnir */
                 mk_mplayer_armor(mtmp, GAUNTLETS_OF_POWER);
             else if (rn2(8))
-                mk_mplayer_armor(mtmp, rnd_class(LEATHER_GLOVES,
+                mk_mplayer_armor(mtmp, rnd_class(GLOVES,
                                                  GAUNTLETS_OF_DEXTERITY));
             if (rn2(8))
                 mk_mplayer_armor(mtmp, rnd_class(LOW_BOOTS,
@@ -368,19 +368,28 @@ void
 mplayer_talk(register struct monst* mtmp)
 {
     static const char
-        *same_class_msg[3] = {
+        *same_class_msg[4] = {
             "I can't win, and neither will you!",
             "You don't deserve to win!",
             "Mine should be the honor, not yours!",
+            "Glory will be mine!",
         },
         *other_class_msg[3] = {
             "The low-life wants to talk, eh?",
             "Fight, scum!",
             "Here is what I have to say!",
+        },
+        *peaceful_msg[3] = {
+            "Best of luck in your quest. Don\'t make the same mistakes I did.",
+            "Let's hope you know what you're doing."
+            "You must complete what I started."
         };
 
-    if (mtmp->mpeaceful)
-        return; /* will drop to humanoid talk */
+    if (mtmp->mpeaceful) {
+        mintroduce(mtmp);
+        pline("%s", peaceful_msg[rn2(3)]);
+        return;
+    }
 
     pline("Talk? -- %s", (mtmp->data == &mons[g.urole.malenum]
                           || mtmp->data == &mons[g.urole.femalenum])

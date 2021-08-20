@@ -6,9 +6,6 @@
 # Code and Patches #
 ####################
 
-# Slash'em Extended
-- Autorecover patch by Kerio
-
 # DynaHack
 - Skill Progress
 
@@ -106,6 +103,7 @@
 #UnNetHack
 - Black Market Code
 - Shambling Horror
+- Aleax item duplication
 
 #FIQHack
 - XP Curve Code
@@ -130,6 +128,9 @@
 - Grudge Patch
 - Colored Walls and Floors Patch
 - Gold Dragon Patch
+
+#AceHack
+- Heaven or Hell mode.
 
 #L
 - Dilapidated Armory Patch

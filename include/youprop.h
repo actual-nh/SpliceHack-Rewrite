@@ -87,11 +87,15 @@
 #define HStun u.uprops[STUNNED].intrinsic /* timed or FROMFORM */
 #define Stunned HStun
 
+#define HAfraid u.uprops[AFRAID].intrinsic
+#define Afraid HAfraid
+
 #define HConfusion u.uprops[CONFUSION].intrinsic
 #define Confusion HConfusion
 
 #define Blinded u.uprops[BLINDED].intrinsic
-#define Blindfolded (ublindf && ublindf->otyp != LENSES)
+#define Blindfolded (ublindf && ublindf->otyp != LENSES \
+                     && ublindf->otyp != MASK)
 /* ...means blind because of a cover */
 #define Blind                                     \
     ((u.uroleplay.blind || Blinded || Blindfolded \
@@ -111,6 +115,7 @@
 #define Strangled u.uprops[STRANGLED].intrinsic
 #define Vomiting u.uprops[VOMITING].intrinsic
 #define Glib u.uprops[GLIB].intrinsic
+#define LarvaCarrier u.uprops[LARVACARRIER].intrinsic
 #define Slimed u.uprops[SLIMED].intrinsic /* [Tom] */
 
 /* Hallucination is solely a timeout */
@@ -118,16 +123,17 @@
 #define HHalluc_resistance u.uprops[HALLUC_RES].intrinsic
 #define EHalluc_resistance u.uprops[HALLUC_RES].extrinsic
 #define Halluc_resistance (HHalluc_resistance || EHalluc_resistance)
-#define Hallucination ((HHallucination && !Halluc_resistance) || DeathVision)
+#define Hallucination ((HHallucination && !Halluc_resistance) || \
+                        u.uroleplay.hallu || DeathVision)
 
 /* Timeout, plus a worn mask */
 #define HDeaf u.uprops[DEAF].intrinsic
 #define EDeaf u.uprops[DEAF].extrinsic
-#define Deaf (HDeaf || EDeaf)
+#define Deaf (HDeaf || EDeaf || u.uroleplay.deaf)
 
 #define HFumbling u.uprops[FUMBLING].intrinsic
 #define EFumbling u.uprops[FUMBLING].extrinsic
-#define Fumbling (HFumbling || EFumbling)
+#define Fumbling (HFumbling || EFumbling || u.uroleplay.clumsy)
 
 #define HWounded_legs u.uprops[WOUNDED_LEGS].intrinsic
 #define EWounded_legs u.uprops[WOUNDED_LEGS].extrinsic
@@ -210,7 +216,7 @@
 /*** Transportation ***/
 #define HJumping u.uprops[JUMPING].intrinsic
 #define EJumping u.uprops[JUMPING].extrinsic
-#define Jumping (HJumping || EJumping)
+#define Jumping (HJumping || EJumping || is_jumper(g.youmonst.data))
 
 #define HTeleportation u.uprops[TELEPORT].intrinsic
 #define ETeleportation u.uprops[TELEPORT].extrinsic
@@ -369,6 +375,10 @@
 #define EReflecting u.uprops[REFLECTING].extrinsic
 #define Reflecting (HReflecting || EReflecting)
 
+#define HWithering u.uprops[WITHERING].intrinsic
+#define EWithering u.uprops[WITHERING].extrinsic
+#define Withering (HWithering || EWithering)
+
 #define HStable u.uprops[STABLE].intrinsic
 #define EStable u.uprops[STABLE].extrinsic
 #define Stable (EStable || HStable)
@@ -387,7 +397,8 @@
    redundant but allows the function calls to be skipped most of the time */
 #define Unaware (g.multi < 0 && (unconscious() || is_fainted()))
 
-#define Hate_silver (u.ulycn >= LOW_PM || hates_silver(g.youmonst.data))
+/* Whether the hero is in a form that dislikes a certain material */
+#define Hate_material(material) mon_hates_material(&g.youmonst, material)
 
 /* _Hitchhikers_Guide_to_the_Galaxy_ on uses for 'towel': "wrap it round
    your head to ward off noxious fumes" [we require it to be damp or wet] */

@@ -161,6 +161,7 @@ dosave0(void)
     store_plname_in_file(nhfp);
     g.ustuck_id = (u.ustuck ? u.ustuck->m_id : 0);
     g.usteed_id = (u.usteed ? u.usteed->m_id : 0);
+    g.fearedmon_id = (u.fearedmon ? u.fearedmon->m_id : 0);
     /* savelev() might save uball and uchain, releasing their memory if
        FREEING, so we need to check their status now; if hero is swallowed,
        uball and uchain will persist beyond saving map floor and inventory
@@ -185,6 +186,7 @@ dosave0(void)
      */
     set_ustuck((struct monst *) 0);
     u.usteed = (struct monst *) 0;
+    u.fearedmon = (struct monst *) 0;
 
     for (ltmp = (xchar) 1; ltmp <= maxledgerno(); ltmp++) {
         if (ltmp == ledger_no(&uz_save))
@@ -314,6 +316,10 @@ savegamestate(NHFILE* nhfp)
         if (nhfp->structlevel)
             bwrite(nhfp->fd, (genericptr_t) &g.usteed_id, sizeof g.usteed_id);
     }
+    if (g.fearedmon_id) {
+        if (nhfp->structlevel)
+            bwrite(nhfp->fd, (genericptr_t) &g.fearedmon_id, sizeof g.fearedmon_id);
+    }
     if (nhfp->structlevel) {
         bwrite(nhfp->fd, (genericptr_t) g.pl_character, sizeof g.pl_character);
         bwrite(nhfp->fd, (genericptr_t) g.pl_fruit, sizeof g.pl_fruit);
@@ -413,6 +419,7 @@ savestateinlock(void)
 
             g.ustuck_id = (u.ustuck ? u.ustuck->m_id : 0);
             g.usteed_id = (u.usteed ? u.usteed->m_id : 0);
+            g.fearedmon_id = (u.fearedmon ? u.fearedmon->m_id : 0);
             g.looseball = BALL_IN_MON ? uball : 0;
             g.loosechain = CHAIN_IN_MON ? uchain : 0;
             savegamestate(nhfp);
@@ -849,6 +856,13 @@ savemon(NHFILE* nhfp, struct monst* mtmp)
         if (buflen > 0)
             if (nhfp->structlevel)
                 bwrite(nhfp->fd, (genericptr_t) ERID(mtmp), buflen);
+        buflen = ETEMPLATE(mtmp) ? (int) sizeof (struct etemplate) : 0;
+        if (nhfp->structlevel)
+            bwrite(nhfp->fd, (genericptr_t) &buflen, sizeof(int));
+        if (buflen > 0)
+            if (nhfp->structlevel) {
+                bwrite(nhfp->fd, (genericptr_t) ETEMPLATE(mtmp), buflen);
+            }
         /* mcorpsenm is inline int rather than pointer to something,
            so doesn't need to be preceded by a length field */
         if (nhfp->structlevel)
@@ -861,7 +875,14 @@ static void
 savemonchn(NHFILE* nhfp, register struct monst* mtmp)
 {
     register struct monst *mtmp2;
+    int iter;
     int minusone = -1;
+    int nummons = NUMMONS;
+    struct permonst *monbegin = &mons[0];
+    int namesize = sizeof(monbegin->pmnames);
+
+    if (perform_bwrite(nhfp))
+        bwrite(nhfp->fd, (genericptr_t) &monbegin, sizeof(monbegin));
 
     while (mtmp) {
         mtmp2 = mtmp->nmon;
@@ -886,6 +907,16 @@ savemonchn(NHFILE* nhfp, register struct monst* mtmp)
     if (perform_bwrite(nhfp)) {
         if (nhfp->structlevel)
             bwrite(nhfp->fd, (genericptr_t) &minusone, sizeof (int));
+    }
+    /* save off our own particular permonst chain */
+    if (perform_bwrite(nhfp))
+        if (nhfp->structlevel)
+            bwrite(nhfp->fd, (genericptr_t) &nummons, sizeof(int)); /* future compatibility check */
+
+    for (iter = 0; iter < nummons; iter++) {
+        if (perform_bwrite(nhfp))
+            if (nhfp->structlevel)
+                bwrite(nhfp->fd, (genericptr_t) ((char *) &mons[iter] + namesize), sizeof(struct permonst) - namesize);
     }
 }
 

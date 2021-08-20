@@ -59,11 +59,12 @@ static const char *godvoices[] = {
  * order to have the values be meaningful.
  */
 
-#define TROUBLE_STONED 14
-#define TROUBLE_SLIMED 13
-#define TROUBLE_STRANGLED 12
-#define TROUBLE_LAVA 11
-#define TROUBLE_SICK 10
+#define TROUBLE_STONED 15
+#define TROUBLE_SLIMED 14
+#define TROUBLE_STRANGLED 13
+#define TROUBLE_LAVA 12
+#define TROUBLE_SICK 11
+#define TROUBLE_WITHERING 10
 #define TROUBLE_STARVING 9
 #define TROUBLE_REGION 8 /* stinking cloud */
 #define TROUBLE_HIT 7
@@ -193,6 +194,8 @@ in_trouble(void)
         return TROUBLE_LAVA;
     if (Sick)
         return TROUBLE_SICK;
+    if (Withering)
+        return TROUBLE_WITHERING;
     if (u.uhs >= WEAK)
         return TROUBLE_STARVING;
     if (region_danger())
@@ -362,11 +365,16 @@ fix_worst_trouble(int trouble)
     case TROUBLE_HUNGRY:
         Your("%s feels content.", body_part(STOMACH));
         init_uhunger();
+        u.hungerprayers++;
         g.context.botl = 1;
         break;
     case TROUBLE_SICK:
         You_feel("better.");
         make_sick(0L, (char *) 0, FALSE, SICK_ALL);
+        break;
+    case TROUBLE_WITHERING:
+        You_feel("hardier.");
+        set_itimeout(&HWithering, (long) 0);
         break;
     case TROUBLE_REGION:
         /* stinking cloud, with hero vulnerable to HP loss */
@@ -1240,6 +1248,12 @@ pleased(aligntyp g_align)
     if (kick_on_butt)
         u.ublesscnt += kick_on_butt * rnz(1000);
 
+    /* The more often a user prays away their hunger, the longer
+       their prayer timeout is. This should help prevent slow,
+       degenerate play. */
+    if (u.hungerprayers > 1)
+        u.ublesscnt += u.hungerprayers * rnd(100);
+
     /* Avoid games that go into infinite loops of copy-pasted commands
        with no human interaction; this is a DoS vector against the
        computer running NetHack.  Once the turn counter is over 100000,
@@ -1360,6 +1374,7 @@ dosacrifice(void)
     static NEARDATA const char
         cloud_of_smoke[] = "A cloud of %s smoke surrounds you...";
     register struct obj *otmp;
+    struct monst *mon;
     int value = 0, pm;
     boolean highaltar;
     aligntyp altaralign = a_align(u.ux, u.uy);
@@ -1407,6 +1422,10 @@ dosacrifice(void)
             value = mons[otmp->corpsenm].difficulty + 1;
             if (otmp->oeaten)
                 value = eaten_stat(value, otmp);
+            if (uwep && uwep->otyp == SACRIFICIAL_KNIFE) {
+                You("dress the sacrifice with your knife.");
+                value += 2;
+            }
         }
 
         /* same race or former pet results apply even if the corpse is
@@ -1415,7 +1434,7 @@ dosacrifice(void)
             if (is_demon(g.youmonst.data)) {
                 You("find the idea very satisfying.");
                 exercise(A_WIS, TRUE);
-            } else if (u.ualign.type != A_CHAOTIC) {
+            } else if (your_race(ptr) || (uwep && uwep->otyp == SACRIFICIAL_KNIFE && uwep->cursed)) {
                 pline("You'll regret this infamous offense!");
                 exercise(A_WIS, FALSE);
             }
@@ -1461,6 +1480,7 @@ dosacrifice(void)
                     else
                         dmon->mstrategy &= ~STRAT_APPEARMSG;
                     You("have summoned %s!", dbuf);
+                    boss_entrance(dmon);
                     if (sgn(u.ualign.type) == sgn(dmon->data->maligntyp))
                         dmon->mpeaceful = TRUE;
                     You("are terrified, and unable to move.");
@@ -1711,9 +1731,10 @@ dosacrifice(void)
                                                ? NH_BLACK
                                                : (const char *) "gray"));
 
-                    if (rnl(u.ulevel) > 6 && u.ualign.record > 0
+                    /* if (rnl(u.ulevel) > 6 && u.ualign.record > 0
                         && rnd(u.ualign.record) > (3 * ALIGNLIM) / 4)
-                        summon_minion(altaralign, TRUE);
+                        summon_minion(altaralign, TRUE); */
+                    summon_minion(altaralign, TRUE);
                     /* anger priest; test handles bones files */
                     if ((pri = findpriest(temple_occupied(u.urooms)))
                         && !p_coaligned(pri))
@@ -1820,6 +1841,46 @@ dosacrifice(void)
                         makeknown(otmp->otyp);
                         discover_artifact(otmp->oartifact);
                     }
+                    return 1;
+                }
+            }
+            /* A particularly faithful player may receive a minion */
+            if (u.ulevel > 4 && u.uluck >= 0
+                && !rn2(10 + (4 * u.ugifts))) {
+                godvoice(u.ualign.type, "Thou shalt not be alone in thy quest!");
+                switch (u.ualign.type) {
+                case A_LAWFUL:
+                    pm = lminion();
+                    break;
+                case A_NEUTRAL:
+                    pm = rand_elemental();
+                    break;
+                case A_CHAOTIC:
+                case A_NONE:
+                    pm = ndemon(u.ualign.type);
+                    break;
+                default:
+                    impossible("unaligned player?");
+                    pm = ndemon(A_NONE);
+                    break;
+                }
+                mon = makemon(&mons[pm], u.ux, u.uy, MM_EMIN | MM_NOERID | MM_NOGRP);
+                if (mon) {
+                    livelog_printf (LL_DIVINEGIFT,
+                                    "was sent %s by %s",
+                                    an(m_monnam(mon)),
+                                    uhim(), align_gname(u.ualign.type));
+                    newedog(mon);
+                    initedog(mon);
+                    mon->isminion = 1;
+                    EMIN(mon)->min_align = u.ualign.type;
+                    EMIN(mon)->renegade = FALSE;
+                    newsym(mon->mx, mon->my);
+                    if (attacktype(mon->data, AT_WEAP)) {
+                        mon->weapon_check = NEED_HTH_WEAPON;
+                        (void) mon_wield_item(mon);
+                    }
+                    u.ugifts++;
                     return 1;
                 }
             }

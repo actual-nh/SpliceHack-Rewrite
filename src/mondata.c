@@ -289,20 +289,71 @@ ranged_attk(struct permonst* ptr)
     return FALSE;
 }
 
-/* True if specific monster is especially affected by silver weapons */
+/* True if specific monster is especially affected by weapons of the given
+ * material type */
 boolean
-mon_hates_silver(struct monst* mon)
+mon_hates_material(struct monst *mon, int material)
 {
-    return (boolean) (is_vampshifter(mon) || hates_silver(mon->data));
+    if (hates_material(mon->data, material))
+        return TRUE;
+    /* extra case: shapeshifted vampires still hate silver */
+    if (material == SILVER && is_vampshifter(mon))
+        return TRUE;
+
+    /* infernal player */
+    if (mon == &g.youmonst && Race_if(PM_INFERNAL) && material == SILVER)
+        return TRUE;
+
+    /* extra extra case: lycanthrope player (monster lycanthropes all fall under
+     * hates_material, and non-lycanthropes can't currently be infected) */
+    if (mon == &g.youmonst && material == SILVER && u.ulycn >= LOW_PM)
+        return TRUE;
+
+    return FALSE;
 }
 
-/* True if monster-type is especially affected by silver weapons */
+/* True if monster-type is especially affected by weapons of the given material
+ * type */
 boolean
-hates_silver(register struct permonst* ptr)
+hates_material(struct permonst *ptr, int material)
 {
-    return (boolean) (is_were(ptr) || ptr->mlet == S_VAMPIRE || is_demon(ptr)
-                      || ptr == &mons[PM_SHADE]
-                      || (ptr->mlet == S_IMP && ptr != &mons[PM_TENGU]));
+    if (material == SILVER) {
+        if (ptr->mlet == S_IMP) {
+            /* impish creatures that aren't actually demonic */
+            if (ptr == &mons[PM_TENGU] || ptr == &mons[PM_REDCAP])
+                return FALSE;
+        }
+        return (is_were(ptr)
+                || is_vampire(ptr)
+                || is_demon(ptr) || ptr == &mons[PM_SHADE]
+                || (ptr->mlet == S_IMP));
+    }
+    else if (material == IRON || material == COLD_IRON) {
+        /* cold iron: fairy/fae creatures hate it */
+        return (is_elf(ptr) || ptr->mlet == S_NYMPH
+                || ptr->mlet == S_IMP);
+    }
+    else if (material == COPPER) {
+        /* copper has antibacterial and antifungal properties,
+         * very good versus sickness, mold and decay */
+        return (ptr->mlet == S_FUNGUS || dmgtype(ptr, AD_DISE)
+                || dmgtype(ptr, AD_DCAY) || dmgtype(ptr, AD_PEST));
+    }
+    return FALSE;
+}
+/* Return amount of damage a monster will take from coming into contact with a
+* material it hates. */
+int
+sear_damage(int material)
+{
+    switch (material) {
+    case SILVER:
+    case COLD_IRON:
+        return 20;
+    case IRON:
+    default:
+        return 6;
+    }
 }
 
 /* True if specific monster is especially affected by light-emitting weapons */
@@ -442,11 +493,13 @@ num_horns(struct permonst* ptr)
     case PM_MINOTAUR:
     case PM_ASMODEUS:
     case PM_BALROG:
+    case PM_BLACK_DRAGON:
         return 2;
     case PM_WHITE_UNICORN:
     case PM_GRAY_UNICORN:
     case PM_BLACK_UNICORN:
     case PM_KI_RIN:
+    case PM_BLUE_DRAGON:
         return 1;
     default:
         break;
@@ -637,6 +690,8 @@ monsndx(struct permonst* ptr)
     register int i;
 
     i = (int) (ptr - &mons[0]);
+    if (ptr->orig_mnum)
+        i = ptr->orig_mnum;
     if (i < LOW_PM || i >= NUMMONS) {
         panic("monsndx - could not index monster (%s)",
               fmt_ptr((genericptr_t) ptr));
@@ -752,10 +807,14 @@ name_to_monplus(
             { "human wererat", PM_HUMAN_WERERAT, NEUTRAL },
             { "human werejackal", PM_HUMAN_WEREJACKAL, NEUTRAL },
             { "human werewolf", PM_HUMAN_WEREWOLF, NEUTRAL },
+            { "human werecockatrice", PM_HUMAN_WERECOCKATRICE, NEUTRAL },
+            { "human pack lord", PM_HUMAN_PACK_LORD, NEUTRAL },
             /* for completeness */
             { "rat wererat", PM_WERERAT, NEUTRAL },
             { "jackal werejackal", PM_WEREJACKAL, NEUTRAL },
             { "wolf werewolf", PM_WEREWOLF, NEUTRAL },
+            { "cockatrice werecockatrice", PM_WERECOCKATRICE, NEUTRAL },
+            { "wolf pack lord", PM_PACK_LORD, NEUTRAL },
             /* Hyphenated names -- it would be nice to handle these via
                fuzzymatch() but it isn't able to ignore trailing stuff */
             { "ki rin", PM_KI_RIN, NEUTRAL },
@@ -990,11 +1049,13 @@ static const short grownups[][2] = {
     { PM_CHICKATRICE, PM_COCKATRICE },
     { PM_LITTLE_DOG, PM_DOG },
     { PM_DOG, PM_LARGE_DOG },
+    { PM_LARGE_DOG, PM_GUARD_DOG },
     { PM_HELL_HOUND_PUP, PM_HELL_HOUND },
     { PM_WINTER_WOLF_PUP, PM_WINTER_WOLF_CUB },
     { PM_WINTER_WOLF_CUB, PM_WINTER_WOLF },
     { PM_KITTEN, PM_HOUSECAT },
     { PM_HOUSECAT, PM_LARGE_CAT },
+    { PM_LARGE_CAT, PM_FAT_CAT },
     { PM_PONY, PM_HORSE },
     { PM_HORSE, PM_WARHORSE },
     { PM_KOBOLD, PM_LARGE_KOBOLD },
@@ -1008,6 +1069,7 @@ static const short grownups[][2] = {
     { PM_HILL_ORC, PM_ORC_CAPTAIN },
     { PM_MORDOR_ORC, PM_ORC_CAPTAIN },
     { PM_URUK_HAI, PM_ORC_CAPTAIN },
+    { PM_ORC_CAPTAIN, PM_ORC_WARLORD },
     { PM_SEWER_RAT, PM_GIANT_RAT },
     { PM_GIANT_RAT, PM_ENORMOUS_RAT },
 	{ PM_ENORMOUS_RAT, PM_RODENT_OF_UNUSUAL_SIZE },
@@ -1026,15 +1088,15 @@ static const short grownups[][2] = {
     { PM_BAT, PM_GIANT_BAT },
     { PM_BABY_GRAY_DRAGON, PM_GRAY_DRAGON },
     { PM_BABY_SILVER_DRAGON, PM_SILVER_DRAGON },
-#if 0 /* DEFERRED */
     {PM_BABY_SHIMMERING_DRAGON, PM_SHIMMERING_DRAGON},
-#endif
     { PM_BABY_RED_DRAGON, PM_RED_DRAGON },
     { PM_BABY_WHITE_DRAGON, PM_WHITE_DRAGON },
     { PM_BABY_ORANGE_DRAGON, PM_ORANGE_DRAGON },
+    { PM_BABY_VIOLET_DRAGON, PM_VIOLET_DRAGON },
     { PM_BABY_BLACK_DRAGON, PM_BLACK_DRAGON },
     { PM_BABY_BLUE_DRAGON, PM_BLUE_DRAGON },
     { PM_BABY_GREEN_DRAGON, PM_GREEN_DRAGON },
+    { PM_BABY_GOLD_DRAGON, PM_GOLD_DRAGON },
     { PM_BABY_YELLOW_DRAGON, PM_YELLOW_DRAGON },
     { PM_RED_NAGA_HATCHLING, PM_RED_NAGA },
     { PM_BLACK_NAGA_HATCHLING, PM_BLACK_NAGA },
@@ -1045,6 +1107,7 @@ static const short grownups[][2] = {
     { PM_BABY_LONG_WORM, PM_LONG_WORM },
     { PM_BABY_PURPLE_WORM, PM_PURPLE_WORM },
     { PM_BABY_CROCODILE, PM_CROCODILE },
+    { PM_CROCODILE, PM_KILLER_CROC },
     { PM_SOLDIER, PM_SERGEANT },
     { PM_SERGEANT, PM_LIEUTENANT },
     { PM_LIEUTENANT, PM_CAPTAIN },
@@ -1060,6 +1123,19 @@ static const short grownups[][2] = {
     { PM_KEYSTONE_KOP, PM_KOP_SERGEANT },
     { PM_KOP_SERGEANT, PM_KOP_LIEUTENANT },
     { PM_KOP_LIEUTENANT, PM_KOP_KAPTAIN },
+    { PM_ICHNEUMON_LARVA, PM_GIANT_ICHNEUMON },
+    { PM_GRID_BUG, PM_SPARK_BUG },
+    { PM_SPARK_BUG, PM_ARC_BUG },
+    { PM_ARC_BUG, PM_LIGHTNING_BUG },
+    { PM_ROCK_PIERCER, PM_IRON_PIERCER },
+    { PM_IRON_PIERCER, PM_GLASS_PIERCER },
+    { PM_GLASS_PIERCER, PM_DIAMOND_PIERCER },
+    { PM_DIAMOND_PIERCER, PM_GOD_PIERCER },
+    { PM_DUST_VORTEX, PM_DUST_DEVIL },
+    { PM_WEREWOLF, PM_PACK_LORD },
+    { PM_HUMAN_WEREWOLF, PM_HUMAN_PACK_LORD },
+    { PM_DEEP_ONE, PM_DEEPER_ONE },
+    { PM_DEEPER_ONE, PM_DEEPEST_ONE },
     { NON_PM, NON_PM }
 };
 
@@ -1183,6 +1259,7 @@ on_fire(struct permonst* mptr, struct attack* mattk)
     case PM_FOG_CLOUD:
     case PM_STEAM_VORTEX:
     case PM_ACID_ELEMENTAL:
+    case PM_MUD_ELEMENTAL:
         what = "boiling";
         break;
     case PM_ICE_VORTEX:
@@ -1227,6 +1304,39 @@ olfaction(struct permonst* mdat)
         || mdat->mlet == S_LIGHT)
         return FALSE;
     return TRUE;
+}
+
+/* Return the material a monster is composed of.
+ * Don't get too specific; most monsters should return 0 from here. We're only
+ * interested if it's something unusual. */
+int
+monmaterial(int mndx)
+{
+    switch (mndx) {
+    case PM_GARGOYLE:
+    case PM_WINGED_GARGOYLE:
+    case PM_EARTH_ELEMENTAL:
+        return MINERAL;
+    case PM_SKELETON:
+        return BONE;
+    case PM_PAPER_GOLEM:
+        return PAPER;
+    case PM_GOLD_GOLEM:
+        return GOLD;
+    case PM_LEATHER_GOLEM:
+        return LEATHER;
+    case PM_WOOD_GOLEM:
+        return WOOD;
+    case PM_CLAY_GOLEM:
+    case PM_STONE_GOLEM:
+        return MINERAL;
+    case PM_GLASS_GOLEM:
+        return GLASS;
+    case PM_IRON_GOLEM:
+        return IRON;
+    default:
+        return 0;
+    }
 }
 
 /* Convert attack damage type AD_foo to M_SEEN_bar */

@@ -16,7 +16,6 @@ static void tmiss(struct obj *, struct monst *, boolean);
 static int throw_gold(struct obj *);
 static void check_shop_obj(struct obj *, xchar, xchar, boolean);
 static boolean harmless_missile(struct obj *);
-static void breakmsg(struct obj *, boolean);
 static boolean toss_up(struct obj *, boolean);
 static void sho_obj_return_to_u(struct obj * obj);
 static boolean mhurtle_step(genericptr_t, int, int);
@@ -753,6 +752,7 @@ hurtle_step(genericptr_t arg, int x, int y)
         ) {
         const char *mnam, *pronoun;
         int glyph = glyph_at(x, y);
+        boolean stomping = (uarmf && uarmf->otyp == STOMPING_BOOTS && verysmall(mon->data));
 
         mon->mundetected = 0; /* wakeup() will handle mimic */
         mnam = a_monnam(mon); /* after unhiding */
@@ -761,15 +761,22 @@ hurtle_step(genericptr_t arg, int x, int y)
             mnam = !strcmp(pronoun, "it") ? "something" : "someone";
         }
         if (!glyph_is_monster(glyph) && !glyph_is_invisible(glyph))
-            You("find %s by bumping into %s.", mnam, pronoun);
+            You("find %s by %s %s.", mnam, stomping ? "stomping on" : "bumping into", pronoun);
         else
-            You("bump into %s.", mnam);
+            You("%s %s.", stomping ? "stomp on" : "bump into", mnam);
         wakeup(mon, FALSE);
         if (!canspotmon(mon))
             map_invisible(mon->mx, mon->my);
         setmangry(mon, FALSE);
         wake_nearto(x, y, 10);
-        return FALSE;
+        if (stomping && verysmall(mon->data)) {
+            xkilled(mon, XKILL_GIVEMSG);
+            makeknown(uarmf->otyp);
+            if (Hallucination) verbalize("Woohoo!");
+        } else {
+            unmul((char *) 0);
+            return FALSE;
+        }
     }
 
     if ((u.ux - x) && (u.uy - y)
@@ -1099,6 +1106,9 @@ toss_up(struct obj *obj, boolean hitsroof)
         breakobj(obj, u.ux, u.uy, TRUE, TRUE);
         obj = 0; /* it's now gone */
         switch (otyp) {
+        case PINEAPPLE:
+            pline("Ouch! %s is covered in spikes!", Doname2(obj));
+            break;
         case EGG:
             if (petrifier && !Stone_resistance
                 && !(poly_when_stoned(g.youmonst.data)
@@ -1145,8 +1155,9 @@ toss_up(struct obj *obj, boolean hitsroof)
                 dmg = 1;
             else if (dmg > 6)
                 dmg = 6;
-            if (g.youmonst.data == &mons[PM_SHADE]
-                && objects[obj->otyp].oc_material != SILVER)
+            if (obj->otyp == PINEAPPLE)
+                dmg = dmg + 2;
+            if (g.youmonst.data == &mons[PM_SHADE] && obj->material != SILVER)
                 dmg = 0;
         }
         if (dmg > 1 && less_damage)
@@ -1179,6 +1190,10 @@ toss_up(struct obj *obj, boolean hitsroof)
             g.thrownobj = 0;  /* now either gone or on floor */
             done(STONING);
             return obj ? TRUE : FALSE;
+        } else if (Hate_material(obj->material)) {
+            /* dmgval() already added extra damage */
+            searmsg(&g.youmonst, &g.youmonst, obj, FALSE);
+            exercise(A_CON, FALSE);
         }
         hitfloor(obj, TRUE);
         g.thrownobj = 0;
@@ -1196,7 +1211,8 @@ throwing_weapon(struct obj *obj)
                       || (is_blade(obj) && !is_sword(obj)
                           && (objects[obj->otyp].oc_dir & PIERCE))
                       /* special cases [might want to add AXE] */
-                      || obj->otyp == WAR_HAMMER || obj->otyp == AKLYS);
+                      || obj->otyp == WAR_HAMMER || obj->otyp == AKLYS
+                      || obj->otyp == THROWING_AXE);
 }
 
 /* the currently thrown object is returning to you (not for boomerangs) */
@@ -1230,7 +1246,7 @@ throwit(struct obj *obj,
     int range, urange;
     boolean crossbowing, gunning, clear_thrownobj = FALSE,
             impaired = (Confusion || Stunned || Blind
-                        || Hallucination || Fumbling),
+                        || Hallucination || Fumbling || Afraid),
             tethered_weapon = (obj->otyp == AKLYS && (wep_mask & W_WEP) != 0);
 
     g.notonhead = FALSE; /* reset potentially stale value */
@@ -1321,7 +1337,7 @@ throwit(struct obj *obj,
         clear_thrownobj = TRUE;
         goto throwit_return;
 
-    } else if (obj->otyp == BOOMERANG && !Underwater) {
+    } else if ((obj->otyp == BOOMERANG || obj->otyp == CHAKRAM) && !Underwater) {
         if (Is_airlevel(&u.uz) || Levitation)
             hurtle(-u.dx, -u.dy, 1, TRUE);
         iflags.returning_missile = 0; /* doesn't return if it hits monster */
@@ -1612,6 +1628,9 @@ omon_adj(struct monst *mon, struct obj *obj, boolean mon_notices)
     }
     /* some objects are more likely to hit than others */
     switch (obj->otyp) {
+    case PINEAPPLE:
+        tmp += 4;
+        break;
     case HEAVY_IRON_BALL:
         if (obj != uball)
             tmp += 2;
@@ -1707,12 +1726,14 @@ thitmonst(register struct monst *mon,
     if (uarmg && uwep && objects[uwep->otyp].oc_skill == P_BOW) {
         switch (uarmg->otyp) {
         case GAUNTLETS_OF_POWER: /* metal */
+        case BOXING_GLOVES: /* bulky */
             tmp -= 2;
             break;
         case GAUNTLETS_OF_FUMBLING:
             tmp -= 3;
             break;
-        case LEATHER_GLOVES:
+        case ROGUES_GLOVES:
+        case GLOVES:
         case GAUNTLETS_OF_DEXTERITY:
             break;
         default:
@@ -1815,7 +1836,7 @@ thitmonst(register struct monst *mon,
                     tmp++;
             }
         } else { /* thrown non-ammo or applied polearm/grapnel */
-            if (otyp == BOOMERANG) /* arbitrary */
+            if (otyp == BOOMERANG || otyp == CHAKRAM) /* arbitrary */
                 tmp += 4;
             else if (throwing_weapon(obj)) /* meant to be thrown */
                 tmp += 2;
@@ -1910,7 +1931,7 @@ thitmonst(register struct monst *mon,
         }
 
     } else if ((otyp == EGG || otyp == CREAM_PIE || otyp == BLINDING_VENOM
-                || otyp == ACID_VENOM)
+                || otyp == ACID_VENOM || otyp == PINEAPPLE)
                && (guaranteed_hit || ACURR(A_DEX) > rnd(25))) {
         (void) hmon(mon, obj, hmode, dieroll);
         return 1; /* hmon used it up */
@@ -1920,6 +1941,13 @@ thitmonst(register struct monst *mon,
         potionhit(mon, obj, POTHIT_HERO_THROW);
         return 1;
 
+    } else if (obj->otyp == PINCH_OF_CATNIP
+                && is_feline(mon->data)) {
+        if (!Blind)
+            pline("%s chases %s tail!", Monnam(mon), mhis(mon));
+        (void) tamedog(mon, (struct obj *) 0);
+        mon->mconf = 1;
+        return 1;
     } else if (befriend_with_obj(mon->data, obj)
                || (mon->mtame && dogfood(mon, obj) <= ACCFOOD)) {
         if (tamedog(mon, obj)) {
@@ -1963,7 +1991,7 @@ gem_accept(register struct monst *mon, register struct obj *obj)
         addluck[]    = " gratefully";
     char buf[BUFSZ];
     boolean is_buddy = sgn(mon->data->maligntyp) == sgn(u.ualign.type);
-    boolean is_gem = objects[obj->otyp].oc_material == GEMSTONE;
+    boolean is_gem = obj->material == GEMSTONE;
     int ret = 0;
 
     Strcpy(buf, Monnam(mon));
@@ -2130,6 +2158,30 @@ breakobj(struct obj *obj,
         obj->in_use = 1; /* in case it's fatal */
         if (obj->otyp == POT_OIL && obj->lamplit) {
             explode_oil(obj, x, y);
+        } else if ((obj->otyp == POT_VAMPIRE_BLOOD ||
+ 				   obj->otyp == POT_BLOOD) &&
+ 				   levl[x][y].altarmask != AM_CHAOTIC &&
+ 				   levl[x][y].altarmask != AM_NONE) {
+   			    /* ALI: If blood is spilt on a lawful or
+   			     * neutral altar the effect is similar to
+   			     * human sacrifice. There's no effect on
+   			     * chaotic or unaligned altars since it is
+   			     * not sufficient to summon a demon.
+   			     */
+   			    if (hero_caused) {
+         				/* Regardless of your race/alignment etc.
+         				 * Lawful and neutral gods really _dont_
+         				 * like vampire or (presumed) human blood
+         				 * on their altars.
+         				 */
+         				pline("You'll regret this infamous offense!");
+         				exercise(A_WIS, FALSE);
+   			    }
+   			    /* curse the lawful/neutral altar */
+   			    pline_The("altar is stained with blood.");
+   			    if (!Is_astralevel(&u.uz))
+   				  levl[x][y].altarmask = AM_CHAOTIC;
+   			    angry_priest();
         } else if (distu(x, y) <= 2) {
             if (!breathless(g.youmonst.data) || haseyes(g.youmonst.data)) {
                 /* wet towel protects both eyes and breathing */
@@ -2194,8 +2246,17 @@ breakobj(struct obj *obj,
             }
         }
     }
-    if (!fracture)
-        delobj(obj);
+    if (!fracture) {
+        /* FIXME: This replicates useup() code but we can't use useup() since
+         * obj isn't necessarily in hero's inventory */
+        if (obj->quan > 1) {
+            obj->quan--;
+            obj->owt = weight(obj);
+        }
+        else {
+            delobj(obj);
+        }
+    }
 }
 
 /*
@@ -2207,8 +2268,8 @@ breaktest(struct obj *obj)
 {
     if (obj_resists(obj, 1, 99))
         return 0;
-    if (objects[obj->otyp].oc_material == GLASS && !obj->oartifact
-        && obj->oclass != GEM_CLASS)
+    if (obj->material == GLASS && !obj->oerodeproof
+        && !obj->oartifact && obj->oclass != GEM_CLASS)
         return 1;
     switch (obj->oclass == POTION_CLASS ? POT_WATER : obj->otyp) {
     case EXPENSIVE_CAMERA:
@@ -2220,13 +2281,15 @@ breaktest(struct obj *obj)
     case BLINDING_VENOM:
     case BULLET:
     case SHOTGUN_SHELL:
+    case FLAMING_LASH:
+    case SLICE_OF_CAKE:
         return 1;
     default:
         return 0;
     }
 }
 
-static void
+void
 breakmsg(struct obj *obj, boolean in_view)
 {
     const char *to_pieces;
@@ -2234,7 +2297,7 @@ breakmsg(struct obj *obj, boolean in_view)
     to_pieces = "";
     switch (obj->oclass == POTION_CLASS ? POT_WATER : obj->otyp) {
     default: /* glass or crystal wand */
-        if (obj->oclass != WAND_CLASS)
+        if (obj->material != GLASS)
             impossible("breaking odd object?");
         /*FALLTHRU*/
     case CRYSTAL_PLATE_MAIL:
@@ -2251,22 +2314,91 @@ breakmsg(struct obj *obj, boolean in_view)
             pline("%s shatter%s%s!", Doname2(obj),
                   (obj->quan == 1L) ? "s" : "", to_pieces);
         break;
+    case FLAMING_LASH:
+        if (in_view)
+            pline("%s crumbles.", Doname2(obj));
+        break;
     case BULLET:
     case SHOTGUN_SHELL:
         break;
     case EGG:
     case MELON:
+    case PUMPKIN:
         pline("Splat!");
         break;
     case CREAM_PIE:
         if (in_view)
             pline("What a mess!");
         break;
+    case SLICE_OF_CAKE:
+        if (in_view)
+            pline("Dirt cake!");
+        break;
     case ACID_VENOM:
     case BLINDING_VENOM:
         pline("Splash!");
         break;
     }
+}
+
+/* Possibly destroy a glass object by its use in melee or thrown combat.
+ * Return TRUE if destroyed.
+ * Separate logic from breakobj because we are not unconditionally breaking the
+ * object, and we also need to make sure it's removed from the inventory
+ * properly. */
+boolean
+break_glass_obj(obj)
+struct obj* obj;
+{
+    if (!obj || !breaktest(obj) || rn2(6))
+        return FALSE;
+    /* now we are definitely breaking it */
+
+    boolean your_fault = !g.context.mon_moving;
+
+    /* remove its worn flags */
+    long unwornmask = obj->owornmask;
+    if (!unwornmask) {
+        impossible("breaking non-equipped glass obj?");
+        return FALSE;
+    }
+    if (carried(obj)) { /* hero's item */
+        if (obj->quan == 1L) {
+            if (obj == uwep) {
+                g.unweapon = TRUE;
+            }
+            setworn(NULL, unwornmask);
+        }
+        update_inventory();
+    } else if (mcarried(obj)) { /* monster's item */
+        if (obj->quan == 1L) {
+            struct monst* mon = obj->ocarry;
+            mon->misc_worn_check &= ~unwornmask;
+            if (unwornmask & W_WEP) {
+                setmnotwielded(mon, obj);
+                possibly_unwield(mon, FALSE);
+            } else if (unwornmask & W_ARMG) {
+                mselftouch(mon, NULL, TRUE);
+            }
+            /* shouldn't really be needed but... */
+            update_mon_intrinsics(mon, obj, FALSE, FALSE);
+        }
+    } else {
+        impossible("breaking glass obj in melee but not in inventory?");
+        return FALSE;
+    }
+
+    if (obj->quan == 1L) {
+        obj->owornmask = 0;
+        pline("%s breaks into pieces!", upstart(yname(obj)));
+        obj_extract_self(obj); /* it's being destroyed */
+    } else {
+        pline("One of %s breaks into pieces!", yname(obj));
+    }
+    breakobj(obj, obj->ox, obj->oy, your_fault, TRUE);
+    if (carried(obj))
+        update_inventory();
+    return TRUE;
 }
 
 static int

@@ -75,8 +75,10 @@ start: NHAccess
 	S_sink: \126
 	S_furnace: \126
 	S_fountain: \126
+	S_vent: \126
 	S_pool: \042
 	S_ice: \042
+	S_bridge: \042
 	S_lava: \035
 	S_vodbridge: \035
 	S_hodbridge: \032
@@ -95,9 +97,6 @@ start: NHAccess
 	S_buzzsaw_trap: \094
 	S_whirlwind_trap: \094
 	S_ice_block_trap: \094
-	S_glyph_of_neutrality: \094
-	S_glyph_of_law: \094
-	S_glyph_of_chaos: \094
 	S_pit: \094
 	S_spiked_pit: \094
 	S_hole: \094
@@ -167,9 +166,6 @@ start: Blank
 		S_buzzsaw_trap: \032
 		S_whirlwind_trap: \032
 		S_ice_block_trap: \032
-		S_glyph_of_neutrality: \032
-		S_glyph_of_law: \032
-		S_glyph_of_chaos: \032
         S_centaur: \032
         S_chain: \032
         S_cloud: \032
@@ -198,7 +194,7 @@ start: Blank
         S_explode9: \032
         S_eye: \032
         S_falling_rock_trap: \032
-				S_furnace: \032
+		S_furnace: \032
         S_feline: \032
         S_fire_trap: \032
         S_flashbeam: \032
@@ -223,6 +219,7 @@ start: Blank
         S_humanoid: \032
         S_hwall: \032
         S_ice: \032
+		S_bridge: \032
         S_imp: \032
         S_invisible: \032
         S_jabberwock: \032
@@ -266,7 +263,6 @@ start: Blank
         S_rust_trap: \032
         S_rustmonst: \032
         S_scroll: \032
-		S_sin: \032
         S_sink: \032
         S_sleeping_gas_trap: \032
         S_snake: \032
@@ -310,6 +306,7 @@ start: Blank
         S_vcdbridge: \032
         S_vcdoor: \032
         S_venom: \032
+		S_vent: \032
         S_vibrating_square: \032
         S_vodbridge: \032
         S_vodoor: \032
@@ -326,7 +323,7 @@ start: Blank
         S_xorn: \032
         S_yeti: \032
         S_zombie: \032
-        S_zouthern: \032
+		S_zouthern: \032
 finish
 
 start: IBMgraphics
@@ -355,6 +352,7 @@ start: IBMgraphics
 	S_fountain: \xf4		# meta-t, integral top half
 	S_pool: \xf7			# meta-w, approx. equals
 	S_ice: \xfa			# meta-z, centered dot
+	S_bridge: \xfa		# meta-z, centered dot
 	S_lava: \xf7			# meta-w, approx. equals
 	S_vodbridge: \xfa		# meta-z, centered dot
 	S_hodbridge: \xfa		# meta-z, centered dot
@@ -570,6 +568,7 @@ start: curses
 	S_corr: \xe1			# meta-a, solid block
 	S_litcorr: \xe1			# meta-a, solid block
 	S_ice: \xfe			# meta-z, centered dot
+	S_bridge: \xfe		# meta-z, centered dot
 	S_vodbridge: \xfe		# meta-z, centered dot
 	S_hodbridge: \xfe		# meta-z, centered dot
 	S_vbeam: \xf8			# meta-3, vertical rule
@@ -606,6 +605,7 @@ start: DECgraphics
 	S_altar: \xfb			# meta-{, pi (used to default to '_')
 	S_pool: \xe0			# meta-\, diamond
 	S_ice: \xfe			# meta-~, centered dot
+	S_bridge: \xfe      # meta-~, centered dot
 	S_lava: \xe0			# meta-\, diamond
 	S_vodbridge: \xfe		# meta-~, centered dot
 	S_hodbridge: \xfe		# meta-~, centered dot

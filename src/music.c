@@ -286,9 +286,17 @@ do_earthquake(int force, int ox, int oy)
                 if (cansee(x, y))
                     pline_The("fountain falls%s.", into_a_chasm);
                 goto do_pit;
+            case VENT:
+                if (cansee(x, y))
+                    pline_The("vent is torn apart.");
+                goto do_pit;
             case SINK:
                 if (cansee(x, y))
                     pline_The("kitchen sink falls%s.", into_a_chasm);
+                goto do_pit;
+            case FURNACE:
+                if (cansee(x, y))
+                    pline_The("furnace tumbles%s.", into_a_chasm);
                 goto do_pit;
             case ALTAR:
                 /* always preserve the high altars */
@@ -486,7 +494,7 @@ const char *beats[] = {
 static int
 do_improvisation(struct obj* instr)
 {
-    int damage, mode, do_spec = !(Stunned || Confusion);
+    int damage, mode, do_spec = !(Stunned || Confusion || Afraid);
     struct obj itmp;
     boolean mundane = FALSE;
 
@@ -507,6 +515,7 @@ do_improvisation(struct obj* instr)
 #define PLAY_STUNNED  0x01
 #define PLAY_CONFUSED 0x02
 #define PLAY_HALLU    0x04
+#define PLAY_AFRAID   0x08
     mode = PLAY_NORMAL;
     if (Stunned)
         mode |= PLAY_STUNNED;
@@ -514,6 +523,8 @@ do_improvisation(struct obj* instr)
         mode |= PLAY_CONFUSED;
     if (Hallucination)
         mode |= PLAY_HALLU;
+    if (Afraid)
+        mode |= PLAY_AFRAID;
 
     if (!rn2(2)) {
         /*
@@ -526,6 +537,8 @@ do_improvisation(struct obj* instr)
         /* likewise for stunned and/or confused combined with hallucination */
         if (mode & PLAY_HALLU)
             mode = PLAY_HALLU;
+        if (mode & PLAY_AFRAID)
+            mode = PLAY_AFRAID;
     }
 
     /* 3.6.3: most of these gave "You produce <blah>" and then many of
@@ -551,6 +564,9 @@ do_improvisation(struct obj* instr)
     case PLAY_HALLU:
         You("disseminate a kaleidoscopic display of floating butterflies.");
         break;
+    case PLAY_AFRAID:
+        You("play your %s, but the tempo is all over the place.", yname(instr));
+        break;
     /* TODO? give some or all of these combinations their own feedback;
        hallucination ones should reference senses other than hearing... */
     case PLAY_STUNNED | PLAY_CONFUSED:
@@ -565,6 +581,7 @@ do_improvisation(struct obj* instr)
 #undef PLAY_STUNNED
 #undef PLAY_CONFUSED
 #undef PLAY_HALLU
+#undef PLAY_AFRAID
 
     switch (itmp.otyp) { /* note: itmp.otyp might differ from instr->otyp */
     case MAGIC_FLUTE: /* Make monster fall asleep */
@@ -575,7 +592,7 @@ do_improvisation(struct obj* instr)
         put_monsters_to_sleep(u.ulevel * 5);
         exercise(A_DEX, TRUE);
         break;
-    case WOODEN_FLUTE: /* May charm snakes */
+    case FLUTE: /* May charm snakes */
         do_spec &= (rn2(ACURR(A_DEX)) + u.ulevel > 25);
         if (!Deaf)
             pline("%s.", Tobjnam(instr, do_spec ? "trill" : "toot"));
@@ -587,6 +604,7 @@ do_improvisation(struct obj* instr)
         break;
     case FIRE_HORN:  /* Idem wand of fire */
     case FROST_HORN: /* Idem wand of cold */
+    case HORN_OF_BLASTING: /* Idem wand of sonics */
         consume_obj_charge(instr, TRUE);
 
         if (!getdir((char *) 0)) {
@@ -600,8 +618,16 @@ do_improvisation(struct obj* instr)
                 losehp(damage, buf, KILLED_BY); /* fire or frost damage */
             }
         } else {
-            buzz((instr->otyp == FROST_HORN) ? AD_COLD - 1 : AD_FIRE - 1,
-                 rn1(6, 6), u.ux, u.uy, u.dx, u.dy);
+            if (instr->otyp == HORN_OF_BLASTING) {
+                static const char * const blasting_msg[3] = {
+                    "OOMPH BLAT!",
+                    "BRAAAAAAAAAAAAAAAP!",
+                    "PWAAAAOOMP!"};
+                if (!Deaf) pline("%s", blasting_msg[rn2(3)]);
+            }
+            buzz((instr->otyp == FROST_HORN) ? AD_COLD - 1 : 
+                    (instr->otyp == HORN_OF_BLASTING) ? AD_LOUD - 1 : AD_FIRE - 1,
+                    rn1(6, 6), u.ux, u.uy, u.dx, u.dy);
         }
         makeknown(instr->otyp);
         break;
@@ -612,6 +638,30 @@ do_improvisation(struct obj* instr)
             You("blow into the horn.");
         awaken_monsters(u.ulevel * 30);
         exercise(A_WIS, FALSE);
+        break;
+    case LUTE: /* Has a small chance of ending confusion effects */
+        do_spec &= (rn2(ACURR(A_DEX)) + u.ulevel > 30);
+        if (!Deaf)
+            pline("%s %s.", Yname2(instr),
+                  do_spec ? "produces a quick little ditty" : "produces a plunking noise");
+        else
+            You("silently jam out.");
+        if (do_spec)
+            make_confused(0L, TRUE);
+        exercise(A_DEX, TRUE);
+        break;
+    /* I love bagpipes, but I think this is still kind of funny. */
+    case BAGPIPE: /* Aggravates monsters, unless you play them well. */
+        do_spec &= (rn2(ACURR(A_DEX)) + u.ulevel > 30);
+        if (!Deaf)
+            pline("%s %s.", Yname2(instr),
+                  do_spec ? "produces beautiful harmonies" : "produces a horrendous din");
+        else
+            You("feel the vibrations in your soul.");
+        if (do_spec)
+            exercise(A_CHA, TRUE);
+        else
+            aggravate();
         break;
     case BUGLE: /* Awaken & attract soldiers */
         if (!Deaf)
@@ -631,7 +681,7 @@ do_improvisation(struct obj* instr)
         charm_monsters((u.ulevel - 1) / 3 + 1);
         exercise(A_DEX, TRUE);
         break;
-    case WOODEN_HARP: /* May calm Nymph */
+    case HARP: /* May calm Nymph */
         do_spec &= (rn2(ACURR(A_DEX)) + u.ulevel > 25);
         if (!Deaf)
             pline("%s %s.", Yname2(instr),
@@ -693,15 +743,16 @@ do_play_instrument(struct obj* instr)
     if (Underwater) {
         You_cant("play music underwater!");
         return 0;
-    } else if ((instr->otyp == WOODEN_FLUTE || instr->otyp == MAGIC_FLUTE
+    } else if ((instr->otyp == FLUTE || instr->otyp == MAGIC_FLUTE
                 || instr->otyp == TOOLED_HORN || instr->otyp == FROST_HORN
-                || instr->otyp == FIRE_HORN || instr->otyp == BUGLE)
+                || instr->otyp == FIRE_HORN || instr->otyp == HORN_OF_BLASTING 
+                || instr->otyp == BUGLE)
                && !can_blow(&g.youmonst)) {
         You("are incapable of playing %s.", the(distant_name(instr, xname)));
         return 0;
     }
     if (instr->otyp != LEATHER_DRUM && instr->otyp != DRUM_OF_EARTHQUAKE
-        && !(Stunned || Confusion || Hallucination)) {
+        && !(Stunned || Confusion || Afraid || Hallucination)) {
         c = ynq("Improvise?");
         if (c == 'q')
             goto nevermind;

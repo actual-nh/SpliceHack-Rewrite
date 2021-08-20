@@ -26,11 +26,16 @@ enum obj_material_types {
     SILVER      = 14, /* Ag */
     GOLD        = 15, /* Au */
     PLATINUM    = 16, /* Pt */
-    MITHRIL     = 17,
-    PLASTIC     = 18,
-    GLASS       = 19,
-    GEMSTONE    = 20,
-    MINERAL     = 21
+    ADAMANTINE  = 17,
+    COLD_IRON   = 18, /* Iron that has been cold-forged */
+    MITHRIL     = 19,
+    PLASTIC     = 20,
+    SLIME       = 21,
+    GLASS       = 22,
+    GEMSTONE    = 23,
+    SHADOW      = 24,
+    MINERAL     = 25,
+    NUM_MATERIAL_TYPES = 26
 };
 
 enum obj_armor_types {
@@ -65,32 +70,30 @@ struct objclass {
 #define oc_bulky oc_big    /* for armor */
     Bitfield(oc_tough, 1); /* hard gems/rings */
 
-    Bitfield(oc_dir, 2);
+    Bitfield(oc_dir, 3);
 #define NODIR 1     /* for wands/spells: non-directional */
 #define IMMEDIATE 2 /*               directional */
 #define RAY 3       /*               zap beams */
 
-#define PIERCE 1 /* for weapons & tools used as weapons */
-#define SLASH 2  /* (latter includes iron ball & chain) */
-#define WHACK 0
+#define PIERCE 0x1 /* for weapons & tools used as weapons */
+#define SLASH 0x2  /* (latter includes iron ball & chain) */
+#define WHACK 0x4
 
-    /* 4 free bits */
+    /* 3 free bits */
 
     Bitfield(oc_material, 5); /* one of obj_material_types */
 
-#define is_organic(otmp) (objects[otmp->otyp].oc_material <= WOOD)
+#define is_organic(otmp) (otmp->material <= WOOD)
 #define is_metallic(otmp)                    \
-    (objects[otmp->otyp].oc_material >= IRON \
-     && objects[otmp->otyp].oc_material <= MITHRIL)
+    (otmp->material >= IRON && otmp->material <= MITHRIL)
 
 /* primary damage: fire/rust/--- */
 /* is_flammable(otmp), is_rottable(otmp) in mkobj.c */
-#define is_rustprone(otmp) (objects[otmp->otyp].oc_material == IRON)
+#define is_rustprone(otmp) (otmp->material == IRON || otmp->material == COLD_IRON)
 
 /* secondary damage: rot/acid/acid */
 #define is_corrodeable(otmp)                   \
-    (objects[otmp->otyp].oc_material == COPPER \
-     || objects[otmp->otyp].oc_material == IRON)
+    (otmp->material == COPPER || otmp->material == IRON)
 
 #define is_damageable(otmp)                                        \
     (is_rustprone(otmp) || is_flammable(otmp) || is_rottable(otmp) \

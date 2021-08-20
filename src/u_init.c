@@ -16,6 +16,7 @@ struct trobj {
 static void ini_inv(struct trobj *);
 static void knows_object(int);
 static void knows_class(char);
+static void shambler_init(void);
 static boolean restricted_spell_discipline(int);
 
 #define UNDEF_TYP 0
@@ -29,7 +30,7 @@ static boolean restricted_spell_discipline(int);
 static struct trobj Archeologist[] = {
     /* if adventure has a name...  idea from tan@uvm-gen */
     { BULLWHIP, 2, WEAPON_CLASS, 1, UNDEF_BLESS },
-    { LEATHER_JACKET, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
+    { JACKET, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
     { FEDORA, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
     { FOOD_RATION, 0, FOOD_CLASS, 3, 0 },
     { PICK_AXE, UNDEF_SPE, TOOL_CLASS, 1, UNDEF_BLESS },
@@ -53,7 +54,7 @@ static struct trobj Cave_man[] = {
     { SLING, 2, WEAPON_CLASS, 1, UNDEF_BLESS },
     { FLINT, 0, GEM_CLASS, 15, UNDEF_BLESS }, /* quan is variable */
     { ROCK, 0, GEM_CLASS, 3, 0 },             /* yields 18..33 */
-    { LEATHER_ARMOR, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
+    { LIGHT_ARMOR, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
     { 0, 0, 0, 0, 0 }
 };
 static struct trobj Convict[] = {
@@ -64,7 +65,7 @@ static struct trobj Convict[] = {
 static struct trobj Dragon_Rider[] = {
     { BROADSWORD, 1, WEAPON_CLASS, 1, UNDEF_BLESS },
     { SCALE_MAIL, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
-    { LEATHER_GLOVES, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
+    { GLOVES, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
     { HIGH_BOOTS, 0, ARMOR_CLASS, 1, 0 },
     { POT_HEALING, 0, POTION_CLASS, 2, UNDEF_BLESS },
     { FOOD_RATION, 0, FOOD_CLASS, 2, 0 },
@@ -73,7 +74,7 @@ static struct trobj Dragon_Rider[] = {
 };
 static struct trobj Healer[] = {
     { SCALPEL, 0, WEAPON_CLASS, 1, UNDEF_BLESS },
-    { LEATHER_GLOVES, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
+    { GLOVES, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
     { STETHOSCOPE, 0, TOOL_CLASS, 1, 0 },
     { POT_HEALING, 0, POTION_CLASS, 4, UNDEF_BLESS },
     { POT_EXTRA_HEALING, 0, POTION_CLASS, 4, UNDEF_BLESS },
@@ -91,14 +92,14 @@ static struct trobj Knight[] = {
     { RING_MAIL, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
     { HELMET, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
     { SMALL_SHIELD, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
-    { LEATHER_GLOVES, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
+    { GLOVES, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
     { APPLE, 0, FOOD_CLASS, 10, 0 },
     { CARROT, 0, FOOD_CLASS, 10, 0 },
     { 0, 0, 0, 0, 0 }
 };
 static struct trobj Monk[] = {
 #define M_BOOK 2
-    { LEATHER_GLOVES, 2, ARMOR_CLASS, 1, UNDEF_BLESS },
+    { GLOVES, 2, ARMOR_CLASS, 1, UNDEF_BLESS },
     { ROBE, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
     { UNDEF_TYP, UNDEF_SPE, SPBOOK_CLASS, 1, 1 },
     { UNDEF_TYP, UNDEF_SPE, SCROLL_CLASS, 1, UNDEF_BLESS },
@@ -129,7 +130,7 @@ static struct trobj Pirate[] = {
 #define PIR_TOOL 8
 	{ SCIMITAR, 0, WEAPON_CLASS, 1, UNDEF_BLESS },
 	{ KNIFE, 1, WEAPON_CLASS, 2, 0 },
-	{ LEATHER_JACKET, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
+	{ JACKET, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
 	{ HIGH_BOOTS, 0, ARMOR_CLASS, 1, UNDEF_BLESS },
 	{ CRAM_RATION, 0, FOOD_CLASS, 2, UNDEF_BLESS },
 	{ BANANA, 0, FOOD_CLASS, 3, 0 },
@@ -154,7 +155,7 @@ static struct trobj Rogue[] = {
 #define R_DAGGERS 1
     { SHORT_SWORD, 0, WEAPON_CLASS, 1, UNDEF_BLESS },
     { DAGGER, 0, WEAPON_CLASS, 10, 0 }, /* quan is variable */
-    { LEATHER_ARMOR, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
+    { LIGHT_ARMOR, 1, ARMOR_CLASS, 1, UNDEF_BLESS },
     { POT_SICKNESS, 0, POTION_CLASS, 1, 0 },
     { LOCK_PICK, 0, TOOL_CLASS, 1, 0 },
     { SACK, 0, TOOL_CLASS, 1, 0 },
@@ -214,7 +215,7 @@ static struct trobj Lamp[] = { { OIL_LAMP, 1, TOOL_CLASS, 1, 0 },
                                { 0, 0, 0, 0, 0 } };
 static struct trobj Blindfold[] = { { BLINDFOLD, 0, TOOL_CLASS, 1, 0 },
                                     { 0, 0, 0, 0, 0 } };
-static struct trobj Instrument[] = { { WOODEN_FLUTE, 0, TOOL_CLASS, 1, 0 },
+static struct trobj Instrument[] = { { FLUTE, 0, TOOL_CLASS, 1, 0 },
                                      { 0, 0, 0, 0, 0 } };
 static struct trobj Xtra_food[] = { { UNDEF_TYP, UNDEF_SPE, FOOD_CLASS, 2, 0 },
                                     { 0, 0, 0, 0, 0 } };
@@ -237,7 +238,7 @@ static struct inv_sub {
     { PM_ELF, SHORT_SWORD, ELVEN_SHORT_SWORD },
     { PM_ELF, BOW, ELVEN_BOW },
     { PM_ELF, ARROW, ELVEN_ARROW },
-    { PM_ELF, HELMET, ELVEN_LEATHER_HELM },
+    { PM_ELF, HELMET, ELVEN_HELM },
     /* { PM_ELF, SMALL_SHIELD, ELVEN_SHIELD }, */
     { PM_ELF, CLOAK_OF_DISPLACEMENT, ELVEN_CLOAK },
     { PM_ELF, CRAM_RATION, LEMBAS_WAFER },
@@ -254,7 +255,7 @@ static struct inv_sub {
     { PM_ORC, LEMBAS_WAFER, TRIPE_RATION },
     { PM_DWARF, SPEAR, DWARVISH_SPEAR },
     { PM_DWARF, SHORT_SWORD, DWARVISH_SHORT_SWORD },
-    { PM_DWARF, HELMET, DWARVISH_IRON_HELM },
+    { PM_DWARF, HELMET, DWARVISH_HELM },
     /* { PM_DWARF, SMALL_SHIELD, DWARVISH_ROUNDSHIELD }, */
     { PM_DWARF, PICK_AXE, DWARVISH_MATTOCK },
     { PM_DWARF, LEMBAS_WAFER, CRAM_RATION },
@@ -266,6 +267,7 @@ static struct inv_sub {
     { PM_DROW, BOW, DARK_ELVEN_BOW },
     { PM_DROW, ARROW, DARK_ELVEN_ARROW },
     { PM_DROW, POT_SICKNESS, POT_SLEEPING },
+    { PM_VAMPIRE, POT_FRUIT_JUICE, POT_BLOOD },
     { NON_PM, STRANGE_OBJECT, STRANGE_OBJECT }
 };
 
@@ -451,6 +453,11 @@ static const struct def_skill Skill_Mon[] = {
     { P_ESCAPE_SPELL, P_SKILLED },
     { P_MATTER_SPELL, P_BASIC },
     { P_MARTIAL_ARTS, P_GRAND_MASTER },
+    /* Role-Specific Skills */
+    { P_FLAMING_FISTS, P_GRAND_MASTER },
+    { P_SHOCKING_FISTS, P_GRAND_MASTER },
+    { P_FREEZING_FISTS, P_GRAND_MASTER },
+    { P_STUNNING_FIST, P_GRAND_MASTER },
     { P_NONE, 0 }
 };
 static const struct def_skill Skill_P[] = {
@@ -530,6 +537,8 @@ static const struct def_skill Skill_R[] = {
     { P_TWO_WEAPON_COMBAT, P_EXPERT },
     { P_BARE_HANDED_COMBAT, P_EXPERT },
     { P_FIREARM, P_EXPERT },
+    /* Role-Specific Skills */
+    { P_BACKSTAB, P_EXPERT },
     { P_NONE, 0 }
 };
 static const struct def_skill Skill_Ran[] = {
@@ -619,6 +628,10 @@ static const struct def_skill Skill_T[] = {
     { P_TWO_WEAPON_COMBAT, P_SKILLED },
     { P_BARE_HANDED_COMBAT, P_SKILLED },
     { P_FIREARM, P_BASIC },
+    /* Tourists have no specific skills of their own, but can get
+       basic skill in the role-specific skills of many other roles. */
+    { P_STUNNING_FIST, P_BASIC },
+    { P_BACKSTAB, P_BASIC },
     { P_NONE, 0 }
 };
 static const struct def_skill Skill_V[] = {
@@ -721,6 +734,83 @@ knows_class(char sym)
     }
 }
 
+static void
+shambler_init(void)
+{
+    int i =0;
+    struct permonst* shambler = &mons[PM_SHAMBLING_HORROR];
+    struct attack* attkptr;
+
+    /* what a horrible night to have a curse */
+  	shambler->mlevel += rnd(12)-3;				/* shuffle level */
+  	shambler->mmove = rn2(10)+9;				/* slow to very fast */
+  	shambler->ac = rn2(21)-10;				/* any AC */
+  	shambler->mr = rn2(5)*25;				/* varying amounts of MR */
+  	shambler->maligntyp = rn2(21)-10;			/* any alignment */
+  	/* attacks...?  */
+  	for (i = 0; i < rnd(4); i++) {
+  		attkptr = &shambler->mattk[i];
+  		/* restrict it to certain types of attacks */
+  		attkptr->aatyp = 0;
+  		while (attkptr->aatyp == 0 || attkptr->aatyp == AT_ENGL || attkptr->aatyp == AT_SPIT ||
+  					attkptr->aatyp == AT_BREA || attkptr->aatyp == AT_EXPL ||
+  					attkptr->aatyp == AT_BOOM || attkptr->aatyp == AT_GAZE ||
+                    attkptr->aatyp == AT_HUGS || attkptr->aatyp == AT_SCRE || 
+                    attkptr->aatyp == AT_VOLY) {
+  			attkptr->aatyp = rn2(AT_TENT);
+  		}
+  		attkptr->adtyp = 0;
+  		while (attkptr->adtyp == 0 || attkptr->adtyp == AD_DETH || attkptr->adtyp == AD_TLPT ||
+  					attkptr->adtyp == AD_SLIM || attkptr->adtyp == AD_VOID ||
+  					attkptr->adtyp == AD_ENCH || attkptr->adtyp == AD_DISN ||
+  					attkptr->adtyp == AD_PEST || attkptr->adtyp == AD_FAMN ||
+                    attkptr->adtyp == AD_HYDR || attkptr->adtyp == AD_DGST ||
+                    attkptr->adtyp == AD_SKEL || attkptr->adtyp == AD_POTN ||
+                    attkptr->adtyp == AD_WERE) {
+  			attkptr->adtyp = rn2(AD_VORP);
+  		}
+  		attkptr->damn = 2;				/* we're almost sure to get this wrong first time */
+  		attkptr->damd = 10;				/* either too high or too low */
+  	}
+  	shambler->msize = rn2(MZ_HUGE+1);			/* any size */
+  	shambler->cwt = 20;					/* fortunately moot as it's flagged NOCORPSE */
+  	shambler->cnutrit = 20;					/* see above */
+  	shambler->msound = rn2(MS_HUMANOID);			/* any but the specials */
+  	shambler->mresists = 0;
+  	for (i = 0; i < rnd(6); i++) {
+  		shambler->mresists |= (1 << rn2(8));		/* physical resistances... */
+  	}
+  	for (i = 0; i < rnd(5); i++) {
+  		shambler->mresists |= (0x100 << rn2(7));	/* 'different' resistances, even clumsy */
+  	}
+  	shambler->mconveys = 0;					/* flagged NOCORPSE */
+  	/*
+  	 * now time for the random flags.  this will likely produce
+  	 * a number of complete trainwreck monsters at first, but
+  	 * every so often something will dial up nasty stuff
+  	 */
+  	shambler->mflags1 = 0;
+  	for (i = 0; i < rnd(17); i++) {
+  		shambler->mflags1 |= (1 << rn2(33));		/* trainwreck this way :D */
+  	}
+  	shambler->mflags1 &= ~M1_UNSOLID;			/* no ghosts */
+
+  	shambler->mflags2 = M2_NOPOLY | M2_HOSTILE;		/* Don't let the player be one of these yet. */
+  	for (i = 0; i < rnd(17); i++) {
+  		shambler->mflags2 |= (1 << rn2(31));
+  	}
+  	shambler->mflags2 &= ~M2_MERC;				/* no guards */
+  	shambler->mflags2 &= ~M2_PEACEFUL;			/* no peacefuls */
+    shambler->mflags2 &= ~M2_SHAPESHIFTER;	    /* no shapeshifters */
+  	shambler->mflags2 &= ~M2_PNAME;				/* not a proper name */
+    /* randomize race flag */
+    for (i = 0; i < rnd(6); i++) {
+  		shambler->mhflags |= (1 << rn2(14));
+  	}
+      shambler->mhflags &= ~MH_WERE;              /* no werecreatures */
+    return;
+}
+
 void
 u_init(void)
 {
@@ -778,11 +868,27 @@ u_init(void)
     set_uasmon();
 
     u.ulevel = 0; /* set up some of the initial attributes */
+    u.hungerprayers = 0;
     u.uhp = u.uhpmax = newhp();
     u.uen = u.uenmax = newpw();
     u.uspellprot = 0;
     adjabil(0, 1);
     u.ulevel = u.ulevelmax = 1;
+
+    /* Init heaven or hell. */
+    if (u.uroleplay.heaven_or_hell) {
+		u.ulives = 3;
+		u.uhpmax = 1;
+		u.uhp = 1;
+        if (!(HWarning & FROMOUTSIDE))
+            HWarning |= FROMOUTSIDE;
+	}
+	else {
+		u.ulives = 0;
+	}
+
+    /* You automatically recognize monsters of your kind */
+    learn_monster(monsndx(g.youmonst.data));
 
     init_uhunger();
     for (i = 0; i <= MAXSPELL; i++)
@@ -798,10 +904,23 @@ u_init(void)
 #endif
 
     /*
-     *  For now, everyone starts out with a night vision range of 1 and
-     *  their xray range disabled.
+     *  For now, everyone starts out with their xray range disabled.
      */
-    u.nv_range = 1;
+    switch (Race_switch) {
+    case PM_ELF:
+    case PM_DROW:
+    case PM_VAMPIRE:
+        u.nv_range = 2;
+        break;
+    case PM_DWARF:
+    case PM_ORC:
+    case PM_GNOME:
+        u.nv_range = 1;
+        break;
+    default:
+        u.nv_range = 1;
+        break;
+    }
     u.xray_range = -1;
 
     /*** Role-specific initializations ***/
@@ -981,10 +1100,22 @@ u_init(void)
         break;
     }
 
+    /* Add knowledge of life saving amulets for heaven or hell mode. */
+	if (u.uroleplay.heaven_or_hell) {
+		knows_object(AMULET_OF_LIFE_SAVING);
+	}
+
     /*** Race-specific initializations ***/
     switch (Race_switch) {
     case PM_HUMAN:
         /* Nothing special */
+        break;
+
+    case PM_INFERNAL:
+        /* All demons are known to infernals */
+        for (i = PM_INFERNAL; i < PM_JUIBLEX; i++) {
+            g.mvitals[i].mvflags |= G_KNOWN;
+        }
         break;
 
     case PM_ELF:
@@ -994,8 +1125,9 @@ u_init(void)
          * get only non-magic instruments.
          */
         if (Role_if(PM_CLERIC) || Role_if(PM_WIZARD)) {
-            static int trotyp[] = { WOODEN_FLUTE, TOOLED_HORN, WOODEN_HARP,
-                                    BELL,         BUGLE,       LEATHER_DRUM };
+            static int trotyp[] = { FLUTE, TOOLED_HORN, HARP,
+                                    BELL,         BUGLE,       LEATHER_DRUM,
+                                    BAGPIPE,      LUTE };
             Instrument[0].trotyp = trotyp[rn2(SIZE(trotyp))];
             ini_inv(Instrument);
         }
@@ -1007,8 +1139,8 @@ u_init(void)
         knows_object(ELVEN_SPEAR);
         knows_object(ELVEN_DAGGER);
         knows_object(ELVEN_BROADSWORD);
-        knows_object(ELVEN_MITHRIL_COAT);
-        knows_object(ELVEN_LEATHER_HELM);
+        knows_object(ELVEN_RING_MAIL);
+        knows_object(ELVEN_HELM);
         knows_object(ELVEN_SHIELD);
         knows_object(ELVEN_BOOTS);
         knows_object(ELVEN_CLOAK);
@@ -1028,8 +1160,8 @@ u_init(void)
         knows_object(DWARVISH_SPEAR);
         knows_object(DWARVISH_SHORT_SWORD);
         knows_object(DWARVISH_MATTOCK);
-        knows_object(DWARVISH_IRON_HELM);
-        knows_object(DWARVISH_MITHRIL_COAT);
+        knows_object(DWARVISH_HELM);
+        knows_object(DWARVISH_RING_MAIL);
         knows_object(DWARVISH_CLOAK);
         knows_object(DWARVISH_ROUNDSHIELD);
         break;
@@ -1054,6 +1186,14 @@ u_init(void)
         knows_object(URUK_HAI_SHIELD);
         knows_object(ORCISH_CLOAK);
         break;
+
+    case PM_VAMPIRE:
+        knows_object(POT_VAMPIRE_BLOOD);
+        knows_object(POT_BLOOD);
+	    /* Vampires start off with gods not as pleased, luck penalty */
+	    adjalign(-5);
+	    change_luck(-1);
+	    break;
 
     default: /* impossible */
         break;
@@ -1093,6 +1233,8 @@ u_init(void)
         /* only get here when didn't boost strength or constitution */
         break;
     }
+
+    shambler_init();
 
     return;
 }
@@ -1173,6 +1315,14 @@ ini_inv(struct trobj *trop)
         otyp = (int) trop->trotyp;
         if (otyp != UNDEF_TYP) {
             obj = mksobj(otyp, TRUE, FALSE);
+            /* See my comment on start scumming object materials below - Kes */
+            if (rn2(50)) obj->material = objects[obj->otyp].oc_material;
+            /* Don't allow weapons to roll high enchantment and get an oname
+             * when they'll then have their enchantment set after this */
+            if ((Hate_material(SILVER) && obj->material == SILVER)
+                || Hate_material(COLD_IRON) && obj->material == COLD_IRON)
+                obj->material = IRON;
+            free_oname(obj);
         } else { /* UNDEF_TYP */
             int trycnt = 0;
             /*
@@ -1200,10 +1350,15 @@ ini_inv(struct trobj *trop)
                    || otyp == RIN_AGGRAVATE_MONSTER
                    || otyp == RIN_HUNGER
                    || otyp == WAN_NOTHING
+                   /* starting with pumpkins can give better AC */
+                   || otyp == PUMPKIN
                    /* orcs start with poison resistance */
                    || (otyp == RIN_POISON_RESISTANCE && Race_if(PM_ORC))
                    /* Monks don't use weapons */
                    || (otyp == SCR_ENCHANT_WEAPON && Role_if(PM_MONK))
+                   /* Infernals already resist fire and hate silver */
+                   || (otyp == RIN_FIRE_RESISTANCE && Race_if(PM_INFERNAL))
+                   || (objects[obj->otyp].oc_material == SILVER && Race_if(PM_INFERNAL))
                    /* wizard patch -- they already have one */
                    || (otyp == SPE_FORCE_BOLT && Role_if(PM_WIZARD))
                    /* powerful spells are either useless to
@@ -1220,6 +1375,13 @@ ini_inv(struct trobj *trop)
                     break;
             }
 
+            /* In xnethack, object material was discarded, in order to avoid
+               start scumming for materials. While I think that's a good idea,
+               I also think if starting with odd materials is rare enough, players
+               will not try to scum for them, and new players will be very
+               excited to occasionally start with some sort of weird item.
+               - Kes */
+            if (rn2(50)) obj->material = objects[obj->otyp].oc_material;
             /* Don't start with +0 or negative rings */
             if (objects[otyp].oc_charged && obj->spe <= 0)
                 obj->spe = rne(3);
@@ -1259,8 +1421,15 @@ ini_inv(struct trobj *trop)
                                 (trop->trotyp == UNDEF_TYP) ? "random " : "",
                                 OBJ_NAME(objects[otyp]));
                     otyp = obj->otyp = inv_subs[i].subs_otyp;
+                    obj->material = objects[obj->otyp].oc_material;
                     break;
                 }
+        }
+
+        /* Create vampire blood */
+        if (g.urace.malenum == PM_VAMPIRE && obj->otyp == FOOD_RATION) {
+            dealloc_obj(obj);
+            obj = mksobj(POT_VAMPIRE_BLOOD, TRUE, FALSE);
         }
 
         /* nudist gets no armor */

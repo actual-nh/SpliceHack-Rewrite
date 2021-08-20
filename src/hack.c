@@ -13,6 +13,7 @@ static void dosinkfall(void);
 static boolean findtravelpath(int);
 static boolean trapmove(int, int, struct trap *);
 static struct monst *monstinroom(struct permonst *, int);
+static void interesting_room(void);
 static boolean doorless_door(int, int);
 static void move_update(boolean);
 static int pickup_checks(void);
@@ -1404,7 +1405,7 @@ domove_core(void)
     register xchar x, y;
     struct trap *trap = NULL;
     int wtcap;
-    boolean on_ice;
+    boolean on_ice, on_bridge;
     xchar chainx = 0, chainy = 0,
           ballx = 0, bally = 0;         /* ball&chain new positions */
     int bc_control = 0;                 /* control for ball&chain */
@@ -1474,9 +1475,22 @@ domove_core(void)
         if (!on_ice && (HFumbling & FROMOUTSIDE))
             HFumbling &= ~FROMOUTSIDE;
 
+        /* check rickety bridge */
+        on_bridge = !Levitation && is_bridge(u.ux, u.uy);
+        if (on_bridge) {
+            if (Flying || is_floater(g.youmonst.data)
+                || is_clinger(g.youmonst.data) || is_whirly(g.youmonst.data)) {
+                    on_bridge = FALSE;
+            } else if (!rn2(5)) {
+                /* TODO: If the monster is heavy enough, then start the countdown to
+                   snapping the bridge. */
+                pline_The("bridge sways beneath you.");
+            }
+        }
+
         x = u.ux + u.dx;
         y = u.uy + u.dy;
-        if (Stunned || (Confusion && !rn2(5))) {
+        if (Stunned || Afraid || (Confusion && !rn2(5))) {
             register int tries = 0;
 
             do {
@@ -1484,10 +1498,11 @@ domove_core(void)
                     nomul(0);
                     return;
                 }
-                confdir();
+                Afraid && tries <= 1 ? feardir() : confdir();
                 x = u.ux + u.dx;
                 y = u.uy + u.dy;
-            } while (!isok(x, y) || bad_rock(g.youmonst.data, x, y));
+            } while (!isok(x, y) || bad_rock(g.youmonst.data, x, y)
+                || (Afraid && x == u.fearedmon->mx && y == u.fearedmon->my));
         }
         /* turbulence might alter your actual destination */
         if (u.uinwater) {
@@ -1661,7 +1676,10 @@ domove_core(void)
                 && !is_safemon(mtmp))) {
 
             /* target monster might decide to switch places with you... */
-            if (mtmp->data == &mons[PM_DISPLACER_BEAST] && !rn2(2)
+            if ((mtmp->data == &mons[PM_DISPLACER_BEAST] ||
+                 mtmp->data == &mons[PM_BABY_SHIMMERING_DRAGON] ||
+                 mtmp->data == &mons[PM_SHIMMERING_DRAGON])
+                && !rn2(2)
                 && mtmp->mux == u.ux0 && mtmp->muy == u.uy0
                 && mtmp->mcanmove && !mtmp->msleeping && !mtmp->meating
                 && !mtmp->mtrapped && !u.utrap && !u.ustuck && !u.usteed
@@ -1794,6 +1812,81 @@ domove_core(void)
         /* might not have escaped, or did escape but remain in same spot */
         if (!moved)
             return;
+    }
+
+    /* warn player before walking into known traps */
+    trap = t_at(x, y);
+    if (trap && trap->tseen && (!g.context.nopick || g.context.run)
+        && !Stunned && !Confusion
+        && (immune_to_trap(&g.youmonst, trap->ttyp) != 1 || Hallucination)) {
+        /* note on hallucination: all traps still show as ^, but the hero can't
+         * tell what they are, so warn of every trap. */
+        char qbuf[QBUFSZ];
+        xchar traptype = (Hallucination ? rnd(TRAPNUM - 1) : trap->ttyp);
+        boolean into = FALSE; /* "onto" the trap vs "into" */
+        switch (traptype) {
+        case BEAR_TRAP:
+        case PIT:
+        case SPIKED_PIT:
+        case HOLE:
+        case TELEP_TRAP:
+        case LEVEL_TELEP:
+        case MAGIC_PORTAL:
+        case WEB:
+            into = TRUE;
+        }
+        snprintf(qbuf, QBUFSZ, "Really %s %sto that %s?",
+                 locomotion(g.youmonst.data, "step"),
+                 (into ? "in" : "on"),
+                 defsyms[trap_to_defsym(traptype)].explanation);
+        if (!paranoid_query(ParanoidTrap, qbuf)) {
+            nomul(0);
+            g.context.move = 0;
+            return;
+        }
+    }
+
+    /* Paranoid checks for dangerous moves into water or lava */
+    if (!Levitation && !Flying && grounded(g.youmonst.data) && !Stunned
+        && !Confusion && levl[x][y].seenv
+        && ((is_pool(x, y) && !is_pool(u.ux, u.uy))
+            || (is_lava(x, y) && !is_lava(u.ux, u.uy)))) {
+        boolean known_wwalking, known_lwalking;
+        known_wwalking = (uarmf && uarmf->otyp == WATER_WALKING_BOOTS
+                        && objects[WATER_WALKING_BOOTS].oc_name_known
+                        && !u.usteed);
+        known_lwalking = (known_wwalking && Fire_resistance &&
+                        uarmf->oerodeproof && uarmf->rknown);
+        /* FIXME: This can be exploited to identify the ring of fire resistance
+        * if the player is wearing it unidentified and has identified
+        * fireproof boots of water walking and is walking over lava. However,
+        * this is such a marginal case that it may not be worth fixing. */
+        if (g.context.nopick) {
+            /* moving with 'm' */
+            if (is_pool(x, y) && !known_wwalking && !Swimming) {
+                if (ParanoidSwim && yn("Really enter the water?") != 'y') {
+                    g.context.move = 0;
+                    nomul(0);
+                    return;
+                }
+            }
+            else if (is_lava(x, y) && !known_lwalking) {
+                if (ParanoidSwim && yn("Really enter the lava?") != 'y') {
+                    g.context.move = 0;
+                    nomul(0);
+                    return;
+                }
+            }
+        } else {
+            /* not moving with 'm'; if not known safe, simply prevent from
+             * moving at all */
+            if ((is_pool(x, y) && !known_wwalking && !Swimming)
+                || (is_lava(x, y) && !known_lwalking)) {
+                g.context.move = 0;
+                nomul(0);
+                return;
+            }
+        }
     }
 
     if (!test_move(u.ux, u.uy, x - u.ux, y - u.uy, DO_MOVE)) {
@@ -2343,9 +2436,23 @@ spoteffects(boolean pick)
                                     : (time_left < 10L) ? 1
                                       : 0]);
     }
+    if (Warning && is_bridge(u.ux, u.uy)) {
+        static const char *const bridgewarnings[] = {
+            "The bridge creaks ominously.",
+            "You feel the bridge shudder.",
+            "The bridge creaks."
+        };
+        long time_left = spot_time_left(u.ux, u.uy, COLLAPSE_ROPE_BRIDGE);
+
+        if (time_left && time_left < 15L)
+            pline("%s", bridgewarnings[(time_left < 2L) ? 2
+                                    : (time_left < 5L) ? 1
+                                      : 0]);
+    }
     if ((mtmp = m_at(u.ux, u.uy)) && !u.uswallow) {
         mtmp->mundetected = mtmp->msleeping = 0;
         switch (mtmp->data->mlet) {
+        case S_ZOUTHERN:
         case S_PIERCER:
             pline("%s suddenly drops from the %s!", Amonnam(mtmp),
                   ceiling(u.ux, u.uy));
@@ -2594,6 +2701,15 @@ check_special_room(boolean newlev)
         case BEEHIVE:
             You("enter a giant beehive!");
             break;
+        case DEN:
+            You("enter the den of a beast pack!");
+            break;
+        case LEMUREPIT:
+ 		    You("enter a pit of screaming lemures!");
+ 		    break;
+        case ARMORY:
+            You("enter a dilapidated armory!");
+            break;
         case COCKNEST:
             You("enter a disgusting nest!");
             break;
@@ -2614,7 +2730,9 @@ check_special_room(boolean newlev)
             struct monst *oracle = monstinroom(&mons[PM_ORACLE], roomno);
 
             if (oracle) {
-                if (!oracle->mpeaceful)
+                if (u.uhave.amulet)
+                    verbalize("Get out of my sight, %s. I know now what you truly are.", g.plname);
+                else if (!oracle->mpeaceful)
                     verbalize("You're in Delphi, %s.", g.plname);
                 else
                     verbalize("%s, %s, welcome to Delphi!",
@@ -2629,6 +2747,12 @@ check_special_room(boolean newlev)
                     Hello((struct monst *)0), g.plname);
                     verbalize("Please have a look around, but don't even think about stealing anything.");
             }
+            break;
+        case ARTROOM:
+            if (Blind)
+                msg_given = FALSE;
+            else
+                interesting_room();
             break;
         case TEMPLE:
             intemple(roomno + ROOMOFFSET);
@@ -2667,6 +2791,15 @@ check_special_room(boolean newlev)
                 case BEEHIVE:
                     g.level.flags.has_beehive = 0;
                     break;
+                case LEMUREPIT:
+     				g.level.flags.has_lemurepit = 0;
+     				break;
+                case DEN:
+                    g.level.flags.has_den = 0;
+                    break;
+                case ARMORY:
+                    g.level.flags.has_armory = 0;
+                    break;
                 }
             }
             if (rt == COURT || rt == SWAMP || rt == MORGUE || rt == ZOO)
@@ -2676,8 +2809,11 @@ check_special_room(boolean newlev)
                     if (!isok(mtmp->mx,mtmp->my)
                         || roomno != levl[mtmp->mx][mtmp->my].roomno)
                         continue;
-                    if (!Stealth && !rn2(3))
+                    if (!Stealth && !rn2(3)) {
+                        if (mtmp->msleeping && canseemon(mtmp))
+                            pline("%s wakes up!", Monnam(mtmp));
                         mtmp->msleeping = 0;
+                    }
                 }
         }
     }
@@ -2736,10 +2872,14 @@ pickup_checks(void)
             pline("It must weigh%s a ton!", lev->looted ? " almost" : "");
         else if (IS_SINK(lev->typ))
             pline_The("plumbing connects it to the floor.");
+        else if (IS_FURNACE(lev->typ))
+            pline_The("furnace is far too heavy to move.");
         else if (IS_GRAVE(lev->typ))
             You("don't need a gravestone.  Yet.");
         else if (IS_FOUNTAIN(lev->typ))
             You("could drink the %s...", hliquid("water"));
+        else if (IS_VENT(lev->typ))
+            pline("Moving the vent is like trying to move the floor.");
         else if (IS_DOOR(lev->typ) && (lev->doormask & D_ISOPEN))
             pline("It won't come off the hinges.");
         else if (IS_ALTAR(lev->typ))
@@ -2949,6 +3089,63 @@ lookaround(void)
             u.dx = x0 - u.ux;
             u.dy = y0 - u.uy;
         }
+    }
+}
+
+/* Message for entering an art room. */
+static void
+interesting_room(void)
+{
+
+    static const char *const adjectives[] = {
+        "furious",          "wrathful",  "mysterious",  "ugly",
+        "beautiful",        "fearful",   "horrified",   "sinister",
+        "poorly-rendered",  "large",     "lifelike",    "unnerving",
+        "peaceful",         "covetous",  "subservient", "lovely",
+        "misshapen"
+    };
+
+    static const char *const art[] = {
+        "painting",   "carving",   "tapestry",  "bas-relief"
+    };
+
+    int name, name2;
+    /* Modified version of rndmonnam */
+    do {
+        name = rn2(NUMMONS);
+    } while ((type_is_pname(&mons[name]) || (mons[name].geno & G_UNIQ)));
+    do {
+        name2 = rn2(NUMMONS);
+    } while ((type_is_pname(&mons[name2]) || (mons[name2].geno & G_UNIQ)));
+    const char* carvemon = pmname(&mons[name], rn2(NEUTRAL + 1));
+    const char* carvemon2 = pmname(&mons[name2], rn2(NEUTRAL + 1));
+    /* Carving message */
+    switch(rn2(5)) {
+    case 0:
+        pline("%s on a wall of this room depicts %s %s.",
+            An(art[rn2(SIZE(art))]),
+            an(adjectives[rn2(SIZE(adjectives))]), carvemon);
+        break;
+    case 1:
+        pline("There is %s of %s in this room.",
+        an(art[rn2(SIZE(art))]), u_gname());
+        break;
+    case 2:
+        pline("%s on a wall of this room depicts a large number of %s.",
+            An(art[rn2(SIZE(art))]), makeplural(carvemon));
+        break;
+    case 3:
+        pline("%s in this room contains a partial map of the dungeon!",
+            An(art[rn2(SIZE(art))]));
+            HConfusion = 1;
+            do_mapping();
+            HConfusion = 0;
+        break;
+    default:
+        pline("%s on the wall of this room depicts a battle between %s and %s. The %s are winning.",
+            An(art[rn2(SIZE(art))]),
+            makeplural(carvemon), makeplural(carvemon2),
+            makeplural(rn2(2) ? carvemon : carvemon2));
     }
 }
 

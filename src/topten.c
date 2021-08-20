@@ -93,14 +93,22 @@ formatkiller(
     boolean incl_helpless)
 {
     static NEARDATA const char *const killed_by_prefix[] = {
-        /* DIED, CHOKING, POISONING, STARVING, */
-        "killed by ", "choked on ", "poisoned by ", "died of ",
+        /* DIED, MURDERED, CHOKING, POISONING, STARVING, */
+        "killed by ", "killed by " "choked on ", "poisoned by ", "died of ",
         /* DROWNING, BURNING, DISSOLVED, CRUSHING, */
         "drowned in ", "burned by ", "dissolved in ", "crushed to death by ",
         /* STONING, TURNED_SLIME, GENOCIDED, */
         "petrified by ", "turned to slime by ", "killed by ",
         /* PANICKED, TRICKED, QUIT, ESCAPED, ASCENDED */
         "", "", "", "", ""
+    };
+    static NEARDATA const char *const murdered_by_msg[] = {
+        "slain by ",
+        "dismembered by ",  "sent to the next life by ",  "overpowered by ",
+        "killed by ",       "inhumed by ",                "dispatched by ",
+        "done in by ",      "brought low by ",            "struck down by ",
+        "offed by ",        "taken down by ",             "sent to the grave by ",
+        "cut down by ",     "slaughtered by "
     };
     unsigned l;
     char c, *kname = g.killer.name;
@@ -116,7 +124,13 @@ formatkiller(
         kname = an(kname);
         /*FALLTHRU*/
     case KILLED_BY:
-        (void) strncat(buf, killed_by_prefix[how], siz - 1);
+        #ifdef UNIQDEATHS
+        if (how == MURDERED)
+            (void) strncat(buf,
+                murdered_by_msg[g.moves % SIZE(murdered_by_msg)], siz - 1);
+        else
+        #endif
+            (void) strncat(buf, killed_by_prefix[how], siz - 1);
         l = strlen(buf);
         buf += l, siz -= l;
         break;
@@ -437,6 +451,11 @@ encodeconduct(void)
        entered-sokoban bit in the 'achieve' field */
     if (!u.uconduct.sokocheat && sokoban_in_play())
         e |= 1L << 13;
+    /* Splice conducts */
+    if (!u.uconduct.alcohol)
+        e |= 1L << 14;
+    if (!u.uconduct.pactmaker)
+        e |= 1L << 15;
 
     return e;
 }
@@ -709,15 +728,16 @@ topten(int how, time_t when)
     }
 #endif /* XLOGFILE */
 
-    if (wizard || discover) {
+    if (wizard || discover || u.uroleplay.marathon || u.uroleplay.heaven_or_hell) {
         if (how != PANICKED)
             HUP {
                 char pbuf[BUFSZ];
 
                 topten_print("");
                 Sprintf(pbuf,
-             "Since you were in %s mode, the score list will not be checked.",
-                        wizard ? "wizard" : "discover");
+             "Since you were in %s mode, your score will not be submitted.",
+                        wizard ? "wizard" : discover ? "discover" :
+                            u.uroleplay.heaven_or_hell ? "heaven or hell" : "marathon");
                 topten_print(pbuf);
             }
         goto showwin;

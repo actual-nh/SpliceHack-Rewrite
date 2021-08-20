@@ -57,11 +57,7 @@ struct conditionals_t {
     { MON_GLYPH, PM_HELL_HOUND, "Cerberus" },
 #endif
     /* commented out in monst.c at present */
-    { MON_GLYPH, PM_SHOCKING_SPHERE, "beholder" },
-    { MON_GLYPH, PM_BABY_SILVER_DRAGON, "baby shimmering dragon" },
-    { MON_GLYPH, PM_SILVER_DRAGON, "shimmering dragon" },
-    { MON_GLYPH, PM_JABBERWOCK, "vorpal jabberwock" },
-    { MON_GLYPH, PM_VAMPIRE_LEADER, "vampire mage" },
+    { MON_GLYPH, PM_BLINKING_EYE, "beholder" },
 #ifndef CHARON /* not supported yet */
     { MON_GLYPH, PM_CROESUS, "Charon" },
 #endif
@@ -74,9 +70,6 @@ struct conditionals_t {
     /* commented out in monst.c at present */
     { MON_GLYPH, PM_CHROMATIC_DRAGON, "Goblin King" },
     { MON_GLYPH, PM_NEANDERTHAL, "High-elf" },
-    /* objects commented out in objects.c at present */
-    { OBJ_GLYPH, SILVER_DRAGON_SCALE_MAIL, "shimmering dragon scale mail" },
-    { OBJ_GLYPH, SILVER_DRAGON_SCALES, "shimmering dragon scales" },
 /* allow slime mold to look like slice of pizza, since we
  * don't know what a slime mold should look like when renamed anyway
  */
@@ -106,7 +99,9 @@ struct substitute {
                     { GLYPH_CMAP_OFF + S_vwall, GLYPH_CMAP_OFF + S_trwall,
                       "knox walls", "Is_knox(plev)" },
                     { GLYPH_CMAP_OFF + S_vwall, GLYPH_CMAP_OFF + S_trwall,
-                      "sokoban walls", "In_sokoban(plev)" } };
+                      "sokoban walls", "In_sokoban(plev)" },
+                    { GLYPH_CMAP_OFF + S_vwall, GLYPH_CMAP_OFF + S_trwall,
+                      "blackmarket walls", "Is_blackmarket(plev)" } };
 
 #if defined(TILETEXT) || defined(OBTAIN_TILEMAP)
 /*
@@ -736,9 +731,12 @@ struct {
 {S_grave,    "grave", "grave"},
 {S_throne,   "throne", "opulent throne"},
 {S_sink,     "sink", "sink"},
+{S_furnace,  "furnace", "furnace"},
 {S_fountain, "fountain", "fountain"},
+{S_vent,     "vent",     "vent"},
 {S_pool,     "pool", "water"},
 {S_ice,      "ice", "ice"},
+{S_bridge,   "rope bridge", "rope bridge"},
 {S_lava,     "lava", "molten lava"},
 {S_vodbridge, "vertical open drawbridge", "lowered drawbridge"},
 {S_hodbridge, "horizontal open drawbridge", "lowered drawbridge"},
@@ -757,6 +755,9 @@ struct {
 {S_sleeping_gas_trap,    "sleeping gas trap", "sleeping gas trap"},
 {S_rust_trap,            "rust trap", "rust trap"},
 {S_fire_trap,            "fire trap", "fire trap"},
+{S_buzzsaw_trap,         "buzzsaw trap", "buzzsaw trap"},
+{S_ice_block_trap,       "ice block trap", "ice block trap"},
+{S_whirlwind_trap,       "whirlwind trap", "whirlwind trap"},
 {S_pit,                  "pit", "pit"},
 {S_spiked_pit,           "spiked pit", "spiked pit"},
 {S_hole,                 "hole", "hole"},

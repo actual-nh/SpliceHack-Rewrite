@@ -13,11 +13,14 @@ static boolean generate_stairs_room_good(struct mkroom *, int);
 static struct mkroom *generate_stairs_find_room(void);
 static void generate_stairs(void);
 static void mkfount(int, struct mkroom *);
+static void mkfurnace(struct mkroom *);
+static void mkvent(int, struct mkroom *);
 static boolean find_okay_roompos(struct mkroom *, coord *);
 static void mksink(struct mkroom *);
 static void mkaltar(struct mkroom *);
 static void mkgrave(struct mkroom *);
 static void makevtele(void);
+static void mkchasms(void);
 void clear_level_structures(void);
 static void fill_ordinary_room(struct mkroom *);
 static void makelevel(void);
@@ -654,6 +657,67 @@ makevtele(void)
     makeniche(TELEP_TRAP);
 }
 
+static void
+mkchasms(void)
+{
+    int x, y, x2, y2, x3, y3;
+    boolean cells[COLNO][ROWNO];
+    boolean cells2[COLNO][ROWNO];
+    int passes, wallcnt;
+    int maxpasses = 5;
+    int pooltyp = CORR;  
+    
+    /* Initial pass; randomly fill level. */
+    for (x = 0; x < COLNO; x++) {
+        for (y = 0; y < ROWNO; y++) {
+            if (rn2(100) < 45) { cells[x][y] = 1; }
+            else cells[x][y] = 0;
+            cells2[x][y] = 0;
+        }
+    }
+
+    /* Cellular automata */
+    for (passes = 0; passes < maxpasses; passes++) {
+        for (x = 2; x < COLNO - 2; x++) {
+            for (y = 2; y < ROWNO - 2; y++) {
+                wallcnt = 0;
+                for (x2 = x - 1; x2 <= x + 1; x2++) {
+                    for (y2 = y - 1; y2 <= y + 1; y2++) {
+                        if (cells[x2][y2]) wallcnt += 1;
+                    }
+                }
+                if (wallcnt >= 5) cells2[x][y] = 1;
+                else cells2[x][y] = 0;
+            }
+        }
+        /* Transfer array */
+        for (x = 0; x < COLNO; x++) {
+            for (y = 0; y < ROWNO; y++) {
+                cells[x][y] = cells2[x][y];
+            }
+        }
+    }
+
+    /* Transfer cells to map */
+    if (depth(&u.uz) >= 20)
+        pooltyp = rn2(2) ? MOAT : LAVAPOOL;
+    for (x = 0; x < COLNO; x++) {
+        for (y = 0; y < ROWNO; y++) {
+            if (cells[x][y]) {
+                if (levl[x][y].typ == CORR || levl[x][y].typ == SCORR) {
+                    levl[x][y].typ = pooltyp;
+                    create_rope_bridge(x, y);
+                }
+                else if (levl[x][y].typ == STONE) {
+                    levl[x][y].typ = pooltyp;
+                    if (pooltyp == CORR) maketrap(x, y, HOLE);
+                }
+                levl[x][y].lit = 1;
+            }
+        }
+    }
+}
+
 /* clear out various globals that keep information on the current level.
  * some of this is only necessary for some types of levels (maze, normal,
  * special) but it's easier to put it all in one place than make sure
@@ -686,7 +750,9 @@ clear_level_structures(void)
     g.level.bonesinfo = (struct cemetery *) 0;
 
     g.level.flags.nfountains = 0;
+    g.level.flags.nvents = 0;
     g.level.flags.nsinks = 0;
+    g.level.flags.nfurnaces = 0;
     g.level.flags.has_shop = 0;
     g.level.flags.has_vault = 0;
     g.level.flags.has_zoo = 0;
@@ -696,6 +762,9 @@ clear_level_structures(void)
     g.level.flags.has_barracks = 0;
     g.level.flags.has_temple = 0;
     g.level.flags.has_swamp = 0;
+    g.level.flags.has_den = 0;
+    g.level.flags.has_armory = 0;
+    g.level.flags.has_lemurepit = 0;
     g.level.flags.noteleport = 0;
     g.level.flags.hardfloor = 0;
     g.level.flags.nommap = 0;
@@ -737,6 +806,7 @@ fill_ordinary_room(struct mkroom *croom)
     int trycnt = 0;
     coord pos;
     struct monst *tmonst; /* always put a web with a spider */
+    struct obj *otmp; /* sconces need to begin burning */
     int x, y;
 
     if (croom->rtype != OROOM && croom->rtype != THEMEROOM)
@@ -776,10 +846,16 @@ fill_ordinary_room(struct mkroom *croom)
         goto skip_nonrogue;
     if (!rn2(10))
         mkfount(0, croom);
+    if (!rn2(80) && depth(&u.uz) > 3)
+        /* We could make vents at any level, but generating them
+           on level one could lead to cheap instadeaths. */
+        mkvent(0, croom);
     if (!rn2(60))
         mksink(croom);
     if (!rn2(60))
         mkaltar(croom);
+    if (!rn2(70))
+        mkfurnace(croom);
     x = 80 - (depth(&u.uz) * 2);
     if (x < 2)
         x = 2;
@@ -791,6 +867,12 @@ fill_ordinary_room(struct mkroom *croom)
         (void) mkcorpstat(STATUE, (struct monst *) 0,
                             (struct permonst *) 0, pos.x,
                             pos.y, CORPSTAT_INIT);
+    /* light it up with some sconces */
+    if ((rn2(max(2, depth(&u.uz) - 4)) <= 3)
+        && somexyspace(croom, &pos)) {
+        otmp = mksobj_at(SCONCE , pos.x, pos.y, FALSE, FALSE);
+        begin_burn(otmp, FALSE);
+    }
     /* put box/chest inside;
      *  40% chance for at least 1 box, regardless of number
      *  of rooms; about 5 - 7.5% for 2 boxes, least likely
@@ -816,6 +898,10 @@ fill_ordinary_room(struct mkroom *croom)
                 make_engr_at(x, y, mesg, 0L, MARK);
         }
     }
+
+    /* Maybe decorate the walls */
+    if (croom->rtype == OROOM && depth(&u.uz) > 1 && !rn2(20))
+        croom->rtype = ARTROOM;
 
  skip_nonrogue:
     if (!rn2(3) && somexyspace(croom, &pos)) {
@@ -888,6 +974,11 @@ makelevel(void)
         makecorridors();
         make_niches();
 
+        /* Generate chasms. We do this before generating vaults, since that way
+           the lit flag will carry over. */
+        if (rn2(3) && depth(&u.uz) > 3)
+            mkchasms();
+
         /* make a secret treasure vault, not connected to the rest */
         if (do_vault()) {
             xchar w, h;
@@ -940,6 +1031,8 @@ makelevel(void)
             do_mkroom(MORGUE);
         else if (u_depth > 12 && !rn2(8) && antholemon())
             do_mkroom(ANTHOLE);
+        else if (u_depth > 12 && !rn2(8))
+            do_mkroom(DEN);
         else if (u_depth > 14 && !rn2(4)
                  && !(g.mvitals[PM_SOLDIER].mvflags & G_GONE))
             do_mkroom(BARRACKS);
@@ -948,6 +1041,9 @@ makelevel(void)
         else if (u_depth > 16 && !rn2(8)
                  && !(g.mvitals[PM_COCKATRICE].mvflags & G_GONE))
             do_mkroom(COCKNEST);
+        else if (u_depth > 20 && !rn2(8)
+ 	             && !(g.mvitals[PM_LEMURE].mvflags & G_GONE)) 
+            do_mkroom(LEMUREPIT);
 
  skip0:
         /* Place multi-dungeon branch. */
@@ -1385,6 +1481,18 @@ mktrap(int num, int mktrapflags, struct mkroom *croom, coord *tm)
                 if (lvl < 5)
                     kind = NO_TRAP;
                 break;
+            case WHIRLWIND_TRAP:
+                if (lvl < 3)
+                    kind = NO_TRAP;
+                break;
+            case BUZZSAW_TRAP:
+                if (lvl < 15)
+                    kind = NO_TRAP;
+                break;
+            case ICE_BLOCK_TRAP:
+                if (lvl < 8 || Inhell)
+                    kind = NO_TRAP;
+                break;
             case ANTI_MAGIC:
             case LANDMINE:
                 if (lvl < 6)
@@ -1709,6 +1817,49 @@ mkfount(int mazeflag, struct mkroom *croom)
         levl[m.x][m.y].blessedftn = 1;
 
     g.level.flags.nfountains++;
+}
+
+static void
+mkvent(int mazeflag, struct mkroom *croom)
+{
+    coord m;
+    register int tryct = 0;
+
+    do {
+        if (++tryct > 200)
+            return;
+        if (mazeflag)
+            mazexy(&m);
+        else if (!somexy(croom, &m))
+            return;
+    } while (occupied(m.x, m.y) || bydoor(m.x, m.y));
+
+    levl[m.x][m.y].typ = VENT;
+    g.level.flags.nvents++;
+    if (depth(&u.uz) > 6 && rn2(depth(&u.uz - 4)))
+        levl[m.x][m.y].poisonvnt = 1;
+    (void) start_timer((long) rnd(10), TIMER_LEVEL, FIXTURE_ACTIVATE,
+                           long_to_any(((long) m.x << 16) | (long) m.y));
+}
+
+static void
+mkfurnace(croom)
+struct mkroom *croom;
+{
+    coord m;
+    register int tryct = 0;
+
+    do {
+        if (++tryct > 200)
+            return;
+        if (!somexy(croom, &m))
+            return;
+    } while (occupied(m.x, m.y) || bydoor(m.x, m.y));
+
+    /* Put a furnace at m.x, m.y */
+    levl[m.x][m.y].typ = FURNACE;
+
+    g.level.flags.nfurnaces++;
 }
 
 static boolean

@@ -117,20 +117,23 @@ loot_classify(Loot *sort_item, struct obj *obj)
         break;
     case TOOL_CLASS:
         if (seen && discovered
-            && (otyp == BAG_OF_TRICKS || otyp == HORN_OF_PLENTY))
+            && (otyp == BAG_OF_TRICKS || otyp == HORN_OF_PLENTY || otyp == BAG_OF_RATS))
             k = 2; /* known pseudo-container */
         else if (Is_container(obj))
             k = 1; /* regular container or unknown bag of tricks */
         else
             switch (otyp) {
-            case WOODEN_FLUTE:
+            case FLUTE:
             case MAGIC_FLUTE:
             case TOOLED_HORN:
             case FROST_HORN:
             case FIRE_HORN:
-            case WOODEN_HARP:
+            case HORN_OF_BLASTING:
+            case HARP:
             case MAGIC_HARP:
             case BUGLE:
+            case LUTE:
+            case BAGPIPE:
             case LEATHER_DRUM:
             case DRUM_OF_EARTHQUAKE:
             case HORN_OF_PLENTY: /* not a musical instrument */
@@ -1761,7 +1764,9 @@ silly_thing(const char *word,
             s1 = "T", s2 = "take", s3 = " off";
     } else if ((ocls == RING_CLASS || otyp == MEAT_RING)
                || ocls == AMULET_CLASS
-               || (otyp == BLINDFOLD || otyp == TOWEL || otyp == LENSES)) {
+               || otyp == PUMPKIN
+               || (otyp == BLINDFOLD || otyp == TOWEL || otyp == LENSES
+               || otyp == MASK)) {
         if (!strcmp(word, "wear"))
             s1 = "P", s2 = "put", s3 = " on";
         else if (!strcmp(word, "take off"))
@@ -3284,16 +3289,22 @@ dfeature_at(int x, int y, char *buf)
             dfeature = "open drawbridge portcullis", cmap = -1;
     } else if (IS_FOUNTAIN(ltyp))
         cmap = S_fountain; /* "fountain" */
+    else if (IS_VENT(ltyp))
+        cmap = S_vent; /* vent */
     else if (IS_THRONE(ltyp))
         cmap = S_throne; /* "opulent throne" */
     else if (is_lava(x, y))
         cmap = S_lava; /* "molten lava" */
+    else if (is_bridge(x, y))
+        cmap = S_bridge;
     else if (is_ice(x, y))
         cmap = S_ice; /* "ice" */
     else if (is_pool(x, y))
         dfeature = "pool of water";
     else if (IS_SINK(ltyp))
         cmap = S_sink; /* "sink" */
+    else if (IS_FURNACE(ltyp))
+        cmap = S_furnace; /* "furnace" */
     else if (IS_ALTAR(ltyp)) {
         Sprintf(altbuf, "%saltar to %s (%s)",
                 ((lev->altarmask & AM_SHRINE)
@@ -3604,7 +3615,7 @@ mergable(register struct obj *otmp, register struct obj *obj)
     if (obj->dknown != otmp->dknown
         || (obj->bknown != otmp->bknown && !Role_if(PM_CLERIC))
         || obj->oeroded != otmp->oeroded || obj->oeroded2 != otmp->oeroded2
-        || obj->greased != otmp->greased)
+        || obj->material != otmp->material || obj->greased != otmp->greased)
         return FALSE;
 
     if ((obj->oclass == WEAPON_CLASS || obj->oclass == ARMOR_CLASS)

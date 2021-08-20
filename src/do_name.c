@@ -394,6 +394,7 @@ gather_locs_interesting(int x, int y, int gloc)
                           || sym == S_tree
                           || sym == S_bars
                           || sym == S_ice
+                          || sym == S_bridge
                           || sym == S_air
                           || sym == S_cloud
                           || is_cmap_lava(sym)
@@ -1380,6 +1381,43 @@ oname(struct obj *obj, const char *name)
             else
                 livelog_printf(LL_ARTIFACT, "chose %s to be named \"%s\"", ansimpleoname(obj), bare_artifactname(obj));
         }
+        /* set up specific materials for the artifact */
+        switch(obj->oartifact) {
+        case ART_END:
+        case ART_WAR_S_SWORD:
+            obj->material = BONE;
+            break;
+        case ART_CIRCE_S_WITCHSTAFF:
+            obj->material = COPPER;
+            break;
+        case ART_TROLLSBANE:
+            obj->material = COLD_IRON;
+            break;
+        case ART_SUNSWORD:
+            obj->material = GEMSTONE;
+            break;
+        case ART_SHARUR:
+        case ART_DRAGONBANE:
+            obj->material = GOLD;
+            break;
+        case ART_LONGBOW_OF_DIANA:
+        case ART_WEREBANE:
+        case ART_DEMONBANE:
+        case ART_GRAYSWANDIR:
+        case ART_SWORD_OF_BALANCE:
+        case ART_MITRE_OF_HOLINESS:
+            obj->material = SILVER;
+            break;
+        case ART_YENDORIAN_EXPRESS_CARD:
+            obj->material = PLATINUM;
+            break;
+        case ART_IRON_BALL_OF_LIBERATION:
+            obj->material = IRON;
+            break;
+        default:
+            /* prevent any wishes for materials on an artifact */
+            obj->material = objects[obj->otyp].oc_material;
+        }
     }
     if (carried(obj))
         update_inventory();
@@ -1548,7 +1586,7 @@ docall_xname(struct obj *obj)
         otemp.spe = 0; /* not wet or historic */
     else if (otemp.otyp == TIN)
         otemp.known = 0; /* suppress tin type (homemade, &c) and mon type */
-    else if (otemp.otyp == FIGURINE)
+    else if (otemp.otyp == FIGURINE || otemp.otyp == MASK)
         otemp.corpsenm = NON_PM; /* suppress mon type */
     else if (otemp.otyp == HEAVY_IRON_BALL)
         otemp.owt = objects[HEAVY_IRON_BALL].oc_weight; /* not "very heavy" */
@@ -1695,12 +1733,51 @@ static const char *const ghostnames[] = {
     "Stephan", "Lance Braccus", "Shadowhawk"
 };
 
+static const char *const malhumnames[] = {
+    "Samuel",    "John",   "Alejandro",  "Mickey",  "Bert",      "Ernie",
+    "Larry",    "Curly",  "Shemp",      "Moe",      "Jake",      "Jackson",
+    "Liam",     "Lucas",  "Oliver",     "Jayden",   "Sebastian", "Wyatt",
+    "Connor",   "Owen",   "Ben",        "Levi",     "Hikaru",    "Timmy",
+    "Johnny",   "Spike",  "Josiah",     "Justin",   "Erin",      "Sarah",
+    "Jimbo",    "Bob",    "Shadow",     "Dimitri",  "Harry",     "Donald",
+    "Jerry",    "Dale",   "Arthur",     "Drew",     "Neo",       "Leo",
+    "Trevor",   "Pike",   "Barret",     "Red",      "Roy",       "Hugh",
+    "Juan",
+};
+
+static const char *const femhumnames[] = {
+    "Tiffany",  "Sally",    "Amanda",  "Jane",   "Erin",   "Emma",   "Olivia",
+    "Sofia",    "Wendy",    "Astrid",  "Sylva",  "Terra",  "Kyrie",  "Savannah",
+    "Kennedy",  "Autumn",   "Bella",   "Ivy",    "Freya",  "Kate",   "Zena",
+    "Regina",   "Cosette",  "Chloe",   "Lyra",   "John",   "Alexa",  "Brooke",
+    "Siri",     "Violet",   "Pell",    "Sam",    "Wanda",  "Lois",   "Bianca",
+    "Trinity",  "Carmen",   "Megan",   "Sky",    "Rose",   "Roxy",   "Julie",
+    "Fran",     "Frieda",   "Lana",    "Tanya",  "Sally",  "Rika",   "Sil",
+    "Valeska",  "Yellow",   "Lucy",    "Patty",  "Celia",  "Erika",  "Kestrel"
+};
+
 /* ghost names formerly set by x_monnam(), now by makemon() instead */
 const char *
 rndghostname(void)
 {
     return rn2(7) ? ghostnames[rn2(SIZE(ghostnames))] : (const char *) g.plname;
 }
+
+const char *
+rndhumname(feminine)
+boolean feminine;
+{
+    if (feminine)
+        return femhumnames[rn2(SIZE(femhumnames))];
+    return malhumnames[rn2(SIZE(malhumnames))];
+}
+
+static const char *const dragonages[] = {
+    "young ", "very young", "juvenile ",
+    "adult ", "mature ", "old ", "very old ", 
+    "venerable ", "eternal ", "antediluvian ",
+    "primeval "
+};
 
 /*
  * Monster naming functions:
@@ -1746,6 +1823,7 @@ x_monnam(register struct monst *mtmp, int article,
     char *buf = nextmbuf();
     struct permonst *mdat = mtmp->data;
     const char *pm_name = pmname(mdat, Mgender(mtmp));
+    const char *age_category;
     boolean do_hallu, do_invis, do_it, do_saddle, do_name;
     boolean name_at_start, has_adjectives;
     char *bp;
@@ -1819,6 +1897,8 @@ x_monnam(register struct monst *mtmp, int article,
         Strcat(buf, " the ");
         if (do_invis)
             Strcat(buf, "invisible ");
+        if (has_etemplate(mtmp))
+            Sprintf(eos(buf), "%s ", montemplates[ETEMPLATE(mtmp)->template_index].pmnames[NEUTRAL]);
         Strcat(buf, pm_name);
         return buf;
     }
@@ -1831,6 +1911,14 @@ x_monnam(register struct monst *mtmp, int article,
     if (do_saddle && (mtmp->misc_worn_check & W_SADDLE) && !Blind
         && !Hallucination)
         Strcat(buf, "saddled ");
+    if (monsndx(mdat) <= PM_YELLOW_DRAGON && monsndx(mdat) >= PM_GRAY_DRAGON
+        && do_name && (!has_mgivenname(mtmp) || article == ARTICLE_NONE)) {
+        age_category = dragonages[max(0, min((int) mtmp->m_lev - (int) mdat->mlevel + 3, SIZE(dragonages) -1))];
+        Sprintf(buf, "%s", age_category);
+    }
+    if (has_etemplate(mtmp)) {
+        Sprintf(eos(buf), "%s ", montemplates[ETEMPLATE(mtmp)->template_index].pmnames[NEUTRAL]);
+    }
     has_adjectives = (buf[0] != '\0');
 
     /* Put the actual monster name or type into the buffer now.
@@ -1878,6 +1966,9 @@ x_monnam(register struct monst *mtmp, int article,
                              (boolean) mtmp->female));
         Strcat(buf, lcase(pbuf));
         name_at_start = FALSE;
+    } else if (is_unkdemon(mdat) && (g.mvitals[monsndx(mdat)].mvflags & G_KNOWN) == 0) {
+        Strcat(buf, "demon");
+        name_at_start = (boolean) type_is_pname(mdat);
     } else {
         Strcat(buf, pm_name);
         name_at_start = (boolean) type_is_pname(mdat);
@@ -2327,6 +2418,37 @@ coyotename(struct monst *mtmp, char *buf)
 }
 
 char *
+rnddragonname(char *s)
+{
+    static const char *b[] = { "shr", "gr", "h", "b", "z", "rh", "r", "s" };
+    static const char *m[] = { "y", "ae", "i", "au", "al", "itha", "u", "a" };
+    static const char *e[] = { "gar", "zar", "ken", "seth", "lax", "thon", 
+                               "thos", "taur", "thrax", "mon", "n" };
+
+    int i;
+    int j = 1 + rn2(3);
+
+    if (s) {
+        *s = '\0';
+        for (i = 0; i < j; i++) {
+            Sprintf(eos(s), "%s%s", b[rn2(SIZE(b))], m[rn2(SIZE(m))]);
+        }
+        Sprintf(eos(s), "%s", e[rn2(SIZE(e))]);
+    }
+    return s;
+}
+
+struct monst *
+christen_dragon(struct monst *mtmp)
+{
+    char buf[BUFSZ], *dragonname;
+
+    dragonname = rnddragonname(buf);
+    christen_monst(mtmp, upstart(dragonname));
+    return mtmp;
+}
+
+char *
 rndorcname(char *s)
 {
     static const char *v[] = { "a", "ai", "og", "u" };
@@ -2376,6 +2498,21 @@ christen_orc(struct monst *mtmp, const char *gang, const char *other)
     return mtmp;
 }
 
+static const char *const encyclopedias[] = {
+    /* Alliteration */
+    "Index of Items Moste Interesting", "De Dungeons of Doom for Dummies",
+    "The Adventurer\'s Almanac", "The Implausibility of Identification",
+    "The Big Book of Bats", "Mystickism and Magick",
+    "Monsters Most Malevolent", "The Voluminous Volume Vol. V",
+    "Catacomps and Creeps", "The Encyclopedia of Enchantments",
+    "Mummies, Mimics, and More", "On the Magic of Markers",
+    /* Misc */
+    "A Treatise on Yendor", "Collected Essays of Og",
+    /* Sir Terry, Night Watch */
+    "Anecdotes of the Great Accountants, Vol. III",
+    "Some Observations on the Art of Invisibility"
+};
+
 /* make sure "The Colour of Magic" remains the first entry in here */
 static const char *const sir_Terry_novels[] = {
     "The Colour of Magic", "The Light Fantastic", "Equal Rites", "Mort",
@@ -2392,9 +2529,10 @@ static const char *const sir_Terry_novels[] = {
 };
 
 const char *
-noveltitle(int *novidx)
+noveltitle(int *novidx, boolean encyclopedia)
 {
-    int j, k = SIZE(sir_Terry_novels);
+    int j = 0;
+    int k = encyclopedia ? SIZE(encyclopedias) : SIZE(sir_Terry_novels);
 
     j = rn2(k);
     if (novidx) {
@@ -2403,7 +2541,7 @@ noveltitle(int *novidx)
         else if (*novidx >= 0 && *novidx < k)
             j = *novidx;
     }
-    return sir_Terry_novels[j];
+    return encyclopedia ? encyclopedias[j] : sir_Terry_novels[j];
 }
 
 /* figure out canonical novel title from player-specified one */
@@ -2436,6 +2574,90 @@ lookup_novel(const char *lookname, int *idx)
         return sir_Terry_novels[*idx];
 
     return (const char *) 0;
+}
+
+const char *
+lookup_encyclopedia(lookname, idx)
+const char *lookname;
+int *idx;
+{
+    int k;
+
+    for (k = 0; k < SIZE(encyclopedias); ++k) {
+        if (!strcmpi(lookname, encyclopedias[k])
+            || !strcmpi(The(lookname), encyclopedias[k])) {
+            if (idx)
+                *idx = k;
+            return encyclopedias[k];
+        }
+    }
+    /* name not found; if novelidx is already set, override the name */
+    if (idx && *idx >= 0 && *idx < SIZE(encyclopedias))
+        return encyclopedias[*idx];
+
+    return (const char *) 0;
+}
+
+/* Most of these are actual names of nymphs from mythology. */
+const char* nymphnames[] = {
+    "Erythea", "Hesperia", "Arethusa", "Pasithea", "Thaleia", "Halimede",
+    "Actaea", "Electra", "Maia", "Nesaea", "Alcyone", "Asterope",
+    "Callianeira", "Nausithoe", "Dione", "Thetis", "Ephyra", "Eulimene",
+    "Nerea", "Laomedeia", "Echo", "Maera", "Eurydice", "Lysianassa", "Phoebe",
+    "Daphnis", "Daphnae", "Melinoe", "Othreis", "Polychrome"
+};
+
+const char* maldemonnames[] = {
+    "Agiel", "Kali", "Amon", "Foras", "Armaros", "Orias", "Malthus", "Asag",
+    "Raum", "Iblis", "Vanth", "Bael", "Leonard", "Barbas", "Charun", "Ishmael",
+    "Balthamel", "Rahvin"
+};
+
+const char* femdemonnames[] = {
+    "Mara", "Lamia", "Meraxes", "Daeva", "Amy", "Lilith", "Aliss", "Berith",
+    "Euryale", "Zorya", "Rhaenyra", "Bellatrix", "Rusalka", "Messaana",
+    "Jadis", "Anzu", "Eve", "Bilquis", "Cyndane", "Vanessa", "Graendal"
+};
+#define rnd_name(list) list[rn2(SIZE(list))]
+
+/* Monster introduces themselves. If they're not currently named, give them a
+ * random name from the specified list. */
+void
+mintroduce(mtmp)
+struct monst *mtmp;
+{
+    char buf[BUFSZ];
+
+    if (!has_mgivenname(mtmp) && !(mtmp->data->geno & G_UNIQ)) {
+        const char* name;
+        if (mtmp->data->mlet == S_NYMPH || mtmp->data == &mons[PM_THRIAE]) {
+            name = rnd_name(nymphnames);
+        } else if (is_demon(mtmp->data)) {
+            if (mtmp->female)
+                name = rnd_name(femdemonnames);
+            else
+                name = rnd_name(maldemonnames);
+        } else if (mtmp->data == &mons[PM_GHOST]) {
+            name = rndghostname();
+        } else if (is_orc(mtmp->data)) {
+            name = rndorcname(buf);
+        } else if (is_human(mtmp->data)) {
+            rndhumname(mtmp->female);
+        } else {
+            return;
+        }
+        const char* pronoun =
+            genders[is_neuter(mtmp->data) ? 2 : mtmp->female].him;
+        if (!Deaf) {
+            pline("%s introduces %sself to you as %s.", Monnam(mtmp), pronoun,
+                  name);
+            christen_monst(mtmp, name);
+        } else {
+            pline("%s seems to be introducing %sself, but you can't hear %s.",
+                  Monnam(mtmp), pronoun, pronoun);
+        }
+    }
+    return;
 }
 
 /*do_name.c*/

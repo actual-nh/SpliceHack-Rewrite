@@ -52,9 +52,9 @@ const struct class_sym def_monsyms[MAXMCLASSES] = {
     { DEF_ANT, "", "ant or other insect" },
     { DEF_BLOB, "", "blob" },
     { DEF_COCKATRICE, "", "fowl" },
-    { DEF_DOG, "", "dog or other canine" },
+    { DEF_DOG, "", "canine" },
     { DEF_EYE, "", "eye or sphere" },
-    { DEF_FELINE, "", "cat or other feline" },
+    { DEF_FELINE, "", "feline" },
     { DEF_GREMLIN, "", "gremlin" },
     { DEF_HUMANOID, "", "humanoid" },
     { DEF_IMP, "", "imp or minor demon" },
@@ -69,10 +69,10 @@ const struct class_sym def_monsyms[MAXMCLASSES] = {
     { DEF_RODENT, "", "rodent" },
     { DEF_SPIDER, "", "arachnid or centipede" },
     { DEF_TRAPPER, "", "trapper or lurker above" },
-    { DEF_UNICORN, "", "unicorn or horse" },
+    { DEF_UNICORN, "", "equine" },
     { DEF_VORTEX, "", "vortex" },
     { DEF_WORM, "", "worm" },
-    { DEF_XAN, "", "xan or other mythical/fantastic insect" },
+    { DEF_XAN, "", "fantastic insect" },
     { DEF_LIGHT, "", "light" },
     { DEF_ZOUTHERN, "", "zouthern animal" },
     { DEF_ANGEL, "", "angelic being" },
@@ -86,16 +86,14 @@ const struct class_sym def_monsyms[MAXMCLASSES] = {
     { DEF_GIANT, "", "giant humanoid" },
     { '\0', "", "invisible monster" },
     { DEF_JABBERWOCK, "", "jabberwock" },
-    { DEF_KOP, "", "Keystone Kop" },
+    { DEF_KOP, "", "kop" },
     { DEF_LICH, "", "lich" },
     { DEF_MUMMY, "", "mummy" },
     { DEF_NAGA, "", "naga" },
     { DEF_OGRE, "", "ogre" },
-    { DEF_PLANT, "", "plant" },
     { DEF_PUDDING, "", "pudding or ooze" },
     { DEF_QUANTMECH, "", "aberrant being" },
-    { DEF_RUSTMONST, "", "rust monster or disenchanter" },
-    { DEF_SIN, "", "conceptual incarnation"},
+    { DEF_RUSTMONST, "", "hungry critter" },
     { DEF_SNAKE, "", "snake" },
     { DEF_TROLL, "", "troll" },
     { DEF_UMBER, "", "hulk or horror" },
@@ -164,9 +162,12 @@ const struct symdef defsyms[MAXPCHARS] = {
        { '|', "grave", C(CLR_WHITE) },               /* grave */
        { '\\', "opulent throne", C(HI_GOLD) },       /* throne */
 /*30*/ { '#', "sink", C(CLR_GRAY) },                 /* sink */
+       { '\\', "furnace", C(CLR_ORANGE) },           /* furnace */
        { '{', "fountain", C(CLR_BRIGHT_BLUE) },      /* fountain */
+       { '#', "vent",     C(CLR_BLACK) },            /* vent */
        { '}', "water", C(CLR_BLUE) },                /* pool */
        { '.', "ice", C(CLR_CYAN) },                  /* ice */
+       { '.', "rope bridge", C(CLR_BROWN) },         /* rope bridge */
        { '}', "molten lava", C(CLR_RED) },           /* lava */
        { '.', "lowered drawbridge", C(CLR_BROWN) },  /* vodbridge */
        { '.', "lowered drawbridge", C(CLR_BROWN) },  /* hodbridge */
@@ -185,6 +186,9 @@ const struct symdef defsyms[MAXPCHARS] = {
        { '^', "sleeping gas trap", C(HI_ZAP) },      /* trap */
 /*50*/ { '^', "rust trap", C(CLR_BLUE) },            /* trap */
        { '^', "fire trap", C(CLR_ORANGE) },          /* trap */
+       { '^', "buzzsaw trap", C(CLR_CYAN) },         /* trap */
+       { '^', "ice block trap", C(CLR_BRIGHT_BLUE) },/* trap */
+       { '^', "whirlwind trap", C(CLR_WHITE) },      /* trap */
        { '^', "pit", C(CLR_BLACK) },                 /* trap */
        { '^', "spiked pit", C(CLR_BLACK) },          /* trap */
        { '^', "hole", C(CLR_BROWN) },                /* trap */

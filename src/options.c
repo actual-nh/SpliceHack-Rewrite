@@ -154,6 +154,10 @@ static const struct paranoia_opts {
       "y to pray (supersedes old \"prayconfirm\" option)" },
     { PARANOID_REMOVE, "Remove", 1, "Takeoff", 1,
       "always pick from inventory for Remove and Takeoff" },
+    { PARANOID_SWIM, "swim", 1, NULL, 0,
+      "y to walk into a water or lava space when moving with 'm'" },
+    { PARANOID_TRAP, "trap", 1, "move-trap", 1,
+      "yes vs y to move onto a trap" },
     /* for config file parsing; interactive menu skips these */
     { 0, "none", 4, 0, 0, 0 }, /* require full word match */
     { ~0, "all", 3, 0, 0, 0 }, /* ditto */
@@ -838,6 +842,30 @@ optfn_ratname(int optidx, int req, boolean negated UNUSED, char *opts, char *op)
         if (!opts)
             return optn_err;
         Sprintf(opts, "%s", g.ratname[0] ? g.ratname : none);
+        return optn_ok;
+    }
+    return optn_ok;
+}
+
+int
+optfn_monkeyname(int optidx, int req, boolean negated UNUSED, char *opts, char *op)
+{
+    if (req == do_init) {
+        return optn_ok;
+    }
+    if (req == do_set) {
+        if (op != empty_optstr) {
+            nmcpy(g.monkeyname, op, PL_PSIZ);
+        } else {
+            return optn_err;
+        }
+        sanitize_name(g.monkeyname);
+        return optn_ok;
+    }
+    if (req == get_val) {
+        if (!opts)
+            return optn_err;
+        Sprintf(opts, "%s", g.monkeyname[0] ? g.monkeyname : none);
         return optn_ok;
     }
     return optn_ok;

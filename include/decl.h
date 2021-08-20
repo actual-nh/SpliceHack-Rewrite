@@ -636,7 +636,7 @@ struct _create_particular_data {
     char monclass;
     boolean randmonst;
     boolean maketame, makepeaceful, makehostile;
-    boolean sleeping, saddled, invisible, hidden;
+    boolean sleeping, saddled, invisible, hidden, templated;
 };
 
 /* some array sizes for 'g' */
@@ -847,6 +847,7 @@ struct instance_globals {
     char horsename[PL_PSIZ];
     char birdname[PL_PSIZ];
     char dragonname[PL_PSIZ];
+    char monkeyname[PL_PSIZ];
     char ratname[PL_PSIZ];
     char preferred_pet; /* '\0', 'c', 'd', 'n' (none) */    
     struct monst *mydogs; /* monsters that went down/up together with @ */
@@ -1123,6 +1124,7 @@ struct instance_globals {
     boolean havestate;
     unsigned ustuck_id; /* need to preserve during save */
     unsigned usteed_id; /* need to preserve during save */
+    unsigned fearedmon_id; /* need to preserve during save */
     struct obj *looseball;  /* track uball during save and... */
     struct obj *loosechain; /* track uchain since saving might free it */
 

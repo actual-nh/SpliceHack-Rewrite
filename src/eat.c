@@ -44,7 +44,8 @@ static int offer_ok(struct obj *);
 static int tin_ok(struct obj *);
 
 /* also used to see if you're allowed to eat cats and dogs */
-#define CANNIBAL_ALLOWED() (Role_if(PM_CAVE_DWELLER) || Race_if(PM_ORC))
+#define CANNIBAL_ALLOWED() (Role_if(PM_CAVE_DWELLER) || Race_if(PM_ORC) \
+                            || Race_if(PM_VAMPIRE))
 
 /* monster types that cause hero to be turned into stone if eaten */
 #define flesh_petrifies(pm) (touch_petrifies(pm) || (pm) == &mons[PM_MEDUSA])
@@ -81,11 +82,20 @@ is_edible(register struct obj *obj)
         && (g.youmonst.data != &mons[PM_RUST_MONSTER] || is_rustprone(obj)))
         return TRUE;
 
+    /* Koalas only eat Eucalyptus leaves */
+	if (u.umonnum == PM_KOALA)
+		return (boolean)(obj->otyp == EUCALYPTUS_LEAF);
+
     /* Ghouls only eat non-veggy corpses or eggs (see dogfood()) */
     if (u.umonnum == PM_GHOUL)
         return (boolean)((obj->otyp == CORPSE
                           && !vegan(&mons[obj->corpsenm]))
                          || (obj->otyp == EGG));
+
+    /* As of this version of the game, vampires can only draw blood from
+       the living or potions of blood. */
+    if (maybe_polyd(is_vampire(g.youmonst.data), Race_if(PM_VAMPIRE)))
+		return FALSE;
 
     if (u.umonnum == PM_GELATINOUS_CUBE && is_organic(obj)
         /* [g-cubes can eat containers and retain all contents
@@ -697,7 +707,8 @@ cprefx(register int pm)
         break;
     case PM_DEATH:
     case PM_PESTILENCE:
-    case PM_FAMINE: {
+    case PM_FAMINE:
+    case PM_GRIM_REAPER: {
         pline("Eating that is instantly fatal.");
         Sprintf(g.killer.name, "unwisely ate the body of %s",
                 mons[pm].pmnames[NEUTRAL]);
@@ -835,7 +846,10 @@ should_givit(int type, struct permonst *ptr)
         chance = 10;
         break;
     case TELEPORT_CONTROL:
-        chance = 12;
+        if (ptr == &mons[PM_BLINKING_EYE])
+            chance = 80;
+        else
+            chance = 12;
         break;
     case TELEPAT:
         chance = 1;
@@ -983,7 +997,14 @@ cpostfx(int pm)
         catch_lycanthropy = PM_WEREJACKAL;
         break;
     case PM_HUMAN_WEREWOLF:
+    case PM_HUMAN_PACK_LORD:
         catch_lycanthropy = PM_WEREWOLF;
+        break;
+    case PM_HUMAN_WERECOCKATRICE:
+        catch_lycanthropy = PM_WERECOCKATRICE;
+        break;
+    case PM_HUMAN_WERETIGER:
+        catch_lycanthropy = PM_WERETIGER;
         break;
     case PM_NURSE:
         if (Upolyd)
@@ -1120,7 +1141,7 @@ cpostfx(int pm)
         struct permonst *ptr = &mons[pm];
 
         if (dmgtype(ptr, AD_STUN) || dmgtype(ptr, AD_HALU)
-            || pm == PM_VIOLET_FUNGUS) {
+            || pm == PM_VIOLET_FUNGUS || pm == PM_BLOODSHOT_EYE) {
             pline("Oh wow!  Great stuff!");
             (void) make_hallucinated((HHallucination & TIMEOUT) + 200L, FALSE,
                                      0L);
@@ -1521,13 +1542,13 @@ start_tin(struct obj *otmp)
             tmp = rn2(uwep->cursed ? 3 : !uwep->blessed ? 2 : 1);
             break;
         case DAGGER:
-        case SILVER_DAGGER:
         case ELVEN_DAGGER:
         case ORCISH_DAGGER:
         case ATHAME:
         case KNIFE:
         case STILETTO:
         case CRYSKNIFE:
+        case SACRIFICIAL_KNIFE:
             tmp = 3;
             break;
         case PICK_AXE:
@@ -1868,6 +1889,23 @@ fprefx(struct obj *otmp)
                               FALSE);
         }
         break;
+    case SLICE_OF_CAKE:
+        if (otmp->cursed) {
+            pline("This cake is very filling! You feel bloated.");
+            exercise(A_DEX, FALSE);
+        } else if (Hallucination) {
+            pline("You have some cake, and you eat it too!");
+        } else {
+            pline("This cake is fantastic! You feel amazing.");
+            /* blessed restore ability */
+            int ii;
+            for (ii = 0; ii < A_MAX; ii++)
+                if (ABASE(ii) < AMAX(ii)) {
+                    ABASE(ii) = AMAX(ii);
+                    g.context.botl = 1;
+                }
+        }
+        break;
     case LEMBAS_WAFER:
         if (maybe_polyd(is_orc(g.youmonst.data), Race_if(PM_ORC))) {
             pline("%s", "!#?&* elf kibble!");
@@ -1882,6 +1920,14 @@ fprefx(struct obj *otmp)
     case HUGE_CHUNK_OF_MEAT:
     case MEAT_RING:
         goto give_feedback;
+    case PINCH_OF_CATNIP:
+        if (is_feline(g.youmonst.data)) {
+            pline("Wow! That was excellent!");
+            make_confused(HConfusion + d(2, 4), FALSE);
+        } else {
+            pline("Blech! That was not very enjoyable.");
+        }
+        break;
     case CLOVE_OF_GARLIC:
         if (is_undead(g.youmonst.data)) {
             make_vomiting((long) rn1(g.context.victual.reqtime, 5), FALSE);
@@ -2124,9 +2170,22 @@ eataccessory(struct obj *otmp)
                 HSleepy = (HSleepy & ~TIMEOUT) | newnap;
             break;
         }
+        case AMULET_OF_NAUSEA: {
+            make_vomiting((long) rn1(15, 10), FALSE);
+            break;
+        }
+        case AMULET_OF_DANGER: {
+            if (Hallucination)
+                pline("Let\'s get dangerous...");
+            else
+                You("feel more dangerous!");
+            break;
+        }
         case RIN_SUSTAIN_ABILITY:
         case AMULET_OF_LIFE_SAVING:
+        case AMULET_OF_DRAIN_RESISTANCE:
         case AMULET_OF_FLYING:
+        case AMULET_OF_REINCARNATION:
         case AMULET_OF_REFLECTION: /* nice try */
             /* can't eat Amulet of Yendor or fakes,
              * and no oc_prop even if you could -3.
@@ -2157,7 +2216,7 @@ eatspecial(void)
         vault_gd_watching(GD_EATGOLD);
         return;
     }
-    if (objects[otmp->otyp].oc_material == PAPER) {
+    if (otmp->material == PAPER) {
 #ifdef MAIL_STRUCTURES
         if (otmp->otyp == SCR_MAIL)
             /* no nutrition */
@@ -2218,8 +2277,9 @@ eatspecial(void)
 static const char *foodwords[] = {
     "meal",    "liquid",  "wax",       "food", "meat",     "paper",
     "cloth",   "leather", "wood",      "bone", "scale",    "metal",
-    "metal",   "metal",   "silver",    "gold", "platinum", "mithril",
-    "plastic", "glass",   "rich food", "stone"
+    "metal",   "metal",   "silver",    "gold", "platinum", "adamantine", 
+    "chilled metal",      "mithril",   "plastic", "slime", "glass",
+    "rich food",          "shadow",    "stone",
 };
 
 static const char *
@@ -2230,7 +2290,7 @@ foodword(struct obj *otmp)
     if (otmp->oclass == GEM_CLASS && objects[otmp->otyp].oc_material == GLASS
         && otmp->dknown)
         makeknown(otmp->otyp);
-    return foodwords[objects[otmp->otyp].oc_material];
+    return foodwords[otmp->material];
 }
 
 /* called after consuming (non-corpse) food */
@@ -2353,7 +2413,7 @@ edibility_prompts(struct obj *otmp)
          it_or_they[QBUFSZ], eat_it_anyway[QBUFSZ];
     boolean cadaver = (otmp->otyp == CORPSE || otmp->globby),
             stoneorslime = FALSE;
-    int material = objects[otmp->otyp].oc_material, mnum = otmp->corpsenm;
+    int material = otmp->material, mnum = otmp->corpsenm;
     long rotted = 0L;
 
     Strcpy(foodsmell, Tobjnam(otmp, "smell"));
@@ -2462,8 +2522,8 @@ edibility_prompts(struct obj *otmp)
         && ((material == LEATHER || material == BONE
              || material == DRAGON_HIDE || material == WAX)
             || (cadaver && !vegan(&mons[mnum])))) {
-        Snprintf(buf, sizeof(buf), "%s foul and unfamiliar to you.  %s",
-                 foodsmell, eat_it_anyway);
+        Snprintf(buf, sizeof(buf), "%s foul and unfamiliar to you.  %s", foodsmell,
+                eat_it_anyway);
         if (yn_function(buf, ynchars, 'n') == 'n')
             return 1;
         else
@@ -2473,8 +2533,7 @@ edibility_prompts(struct obj *otmp)
         && ((material == LEATHER || material == BONE
              || material == DRAGON_HIDE)
             || (cadaver && !vegetarian(&mons[mnum])))) {
-        Snprintf(buf, sizeof(buf), "%s unfamiliar to you.  %s",
-                 foodsmell, eat_it_anyway);
+        Snprintf(buf, sizeof(buf), "%s unfamiliar to you.  %s", foodsmell, eat_it_anyway);
         if (yn_function(buf, ynchars, 'n') == 'n')
             return 1;
         else
@@ -2632,7 +2691,7 @@ doeat(void)
             livelog_printf(LL_CONDUCT, "ate for the first time (%s)",
                            food_xname(otmp, FALSE));
         }
-        material = objects[otmp->otyp].oc_material;
+        material = otmp->material;
         if (material == LEATHER || material == BONE
             || material == DRAGON_HIDE) {
             if (!u.uconduct.unvegan++ && !ll_conduct) {
@@ -2747,7 +2806,7 @@ doeat(void)
         /* No checks for WAX, LEATHER, BONE, DRAGON_HIDE.  These are
          * all handled in the != FOOD_CLASS case, above.
          */
-        switch (objects[otmp->otyp].oc_material) {
+        switch (otmp->material) {
         case FLESH:
             if (!u.uconduct.unvegan++ && !ll_conduct) {
                 ll_conduct++;
@@ -2765,6 +2824,7 @@ doeat(void)
         default:
             if (otmp->otyp == PANCAKE || otmp->otyp == FORTUNE_COOKIE /*eggs*/
                 || otmp->otyp == CREAM_PIE || otmp->otyp == CANDY_BAR /*milk*/
+                || otmp->otyp == SLICE_OF_CAKE /*eggs AND milk*/
                 || otmp->otyp == LUMP_OF_ROYAL_JELLY
                 || otmp->otyp == CHEESE)
                 if (!u.uconduct.unvegan++ && !ll_conduct)
@@ -2911,12 +2971,16 @@ gethungry(void)
        this first uhunger decrement, but to stay in such form the hero
        will need to wear an Amulet of Unchanging so still burn a small
        amount of nutrition in the 'moves % 20' ring/amulet check below */
+    /* SpliceHack change: Players with only one experience level get hungry
+       much more slowly. This way, newer players
+       (who may take a long time exploring the first few dungeon levels) have a
+       better chance of dying in combat instead of starving to death :) */
     if ((!Unaware || !rn2(10)) /* slow metabolic rate while asleep */
         && (carnivorous(g.youmonst.data)
             || herbivorous(g.youmonst.data)
             || metallivorous(g.youmonst.data))
         && ((!Role_if(PM_CONVICT) && !Race_if(PM_GHOUL)) || (g.moves % 2) || (u.uhs < HUNGRY))
-        && !Slow_digestion)
+        && !Slow_digestion && (u.ulevel != 1 || (g.moves % 2)))
         u.uhunger--; /* ordinary food consumption */
 
     /*

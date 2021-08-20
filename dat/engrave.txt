@@ -15,8 +15,8 @@ All work and no play makes Urdo a dull priest.
 # The NetHack Song, by Rob Balder
 ASCII stupid question and you'll get a stupid ANSI.
 
-# Junenethack 2018
-Improved Tin Openers rule!
+# Junenethack
+The Order of the Cockatrice rules!
 
 # take-offs and other famous engravings
 Owlbreath
@@ -47,9 +47,9 @@ help help help help help
 my eyes
 they're after me
 RUN RUN RUN
-they all lived in a crooked house
 the end is near
 Hello? Anybody?
+no no no no no
 
 # Creepypasta
 Watch the sky.
@@ -169,8 +169,9 @@ Face god and walk backwards into Gehennom
 # LOTR
 Speak, friend, and enter.
 
-# The Oracle
+# Letters from NPCs
 Please stop by and take a look at my statues! Love, the Oracle.
+Wanna drain for gain? Love, Vladimir
 
 # SCP
 I am bees.
@@ -181,3 +182,8 @@ kittens this way
 # Threats
 GET OUT
 Death to the elves!
+
+# Murderbot Diaries
+As a heartless killing machine, I was a terrible failure.
+I hate having emotions about reality
+I love you, armor, and I’m never leaving you again.
