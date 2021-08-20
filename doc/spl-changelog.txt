@@ -37,6 +37,7 @@ or outright removed. Rationale will be provided for all removed content upon req
 
 Combat System Changes
 - Luck no longer gives a to-hit bonus.
+- Base attack bonus is partially determined by the role one is playing.
 - Weapons have gone through a rebalance.
     -Many weapons now have bonuses or penalties to hit, and can also influence AC when wielded.
     - Given the emphasis on to-hit bonus, these small bonuses and penalties are now much more
@@ -225,6 +226,8 @@ Role Changes
 - Priest
   - Priests can be of any race.
 - Added a few new role/race/alignment combinations.
+- All roles automatically learn their special spell at level 12. The chance of successfully
+  casting a special spell is greatly increased for martial roles.
 
 Interface Changes
 - Ridden monsters are highlighted in bright magenta.
